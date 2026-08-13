@@ -56,14 +56,14 @@ function AddPersonForm({ onCreate }) {
         <div className="field-row">
           <div className="field">
             <label>Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Rohan" />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. swati" />
           </div>
           <div className="field">
             <label>Username</label>
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. rohan"
+              placeholder="e.g. swati"
               autoComplete="off"
             />
           </div>
@@ -84,7 +84,7 @@ function AddPersonForm({ onCreate }) {
             <input
               value={roleLabel}
               onChange={(e) => setRoleLabel(e.target.value)}
-              placeholder="e.g. Designer 3"
+              placeholder="e.g. Operation Coordinator 3"
             />
           </div>
         </div>

@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../db');
 
 async function login(req, res) {
+  console.log("Login attempt")
   const { username, password } = req.body;
 
   if (!username || !password) {
@@ -11,11 +12,12 @@ async function login(req, res) {
 
   try {
     const { rows } = await db.query(
-      `SELECT id, name, username, password_hash, role, role_label FROM users WHERE username = $1`,
+      `SELECT id, name, username, password_hash, role, role_label, active FROM users WHERE username = $1`,
       [username.toLowerCase().trim()]
     );
 
     const user = rows[0];
+    console.log({user})
     if (!user) {
       return res.status(401).json({ error: 'Incorrect username or password.' });
     }

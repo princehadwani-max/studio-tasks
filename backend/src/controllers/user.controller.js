@@ -1,11 +1,14 @@
 const bcrypt = require('bcryptjs');
 const db = require('../db');
 
-const ROLES = ['manager', 'designer', 'operation_coordinator'];
+const ROLES = ['MD','manager','sales manager', 'designer', 'operation_coordinator','export coordinator'];
 const ROLE_DEFAULT_LABEL = {
   manager: 'Manager',
   designer: 'Designer',
   operation_coordinator: 'Operation Coordinator',
+  MD: 'MD',
+  sales_manager : 'Sales Manager',
+  export_coordinator: 'export coordinator',
 };
 
 function isUniqueViolation(err) {
