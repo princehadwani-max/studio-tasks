@@ -8,35 +8,19 @@ const taskRoutes = require('./routes/task.routes');
 
 const app = express();
 
-// --- UPDATED CORS CONFIGURATION ---
-const productionOrigin = process.env.CORS_ORIGIN;
+// --- SIMPLIFIED CORS CONFIGURATION ---
+const corsOptions = {
+  origin: [
+    process.env.CORS_ORIGIN || 'https://studio-tasks-frontend.vercel.app', 
+    /\.vercel\.app$/, // Regex: Safely allows ANY domain ending in .vercel.app
+    'http://localhost:3000'
+  ],
+  credentials: true
+};
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // 1. Allow requests with no origin (e.g., mobile apps, curl)
-    if (!origin) return callback(null, true);
-
-    // 2. Allow if it exactly matches your production environment variable
-    if (origin === productionOrigin) {
-      return callback(null, true);
-    }
-
-    // 3. Dynamically allow all Vercel preview URLs (this fixes your current error)
-    if (origin.endsWith('.vercel.app')) {
-      return callback(null, true);
-    }
-
-    // 4. Allow localhost for local development
-    if (origin.startsWith('http://localhost:')) {
-      return callback(null, true);
-    }
-
-    // If none of the above match, reject the request
-    callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true // Optional: Add this if your app uses cookies or authorization headers
-}));
-// ----------------------------------
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Explicitly handle preflight OPTIONS requests
+// -------------------------------------
 
 app.use(express.json());
 
@@ -50,7 +34,7 @@ app.use('/api/tasks', taskRoutes);
 app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).json({ error: 'Something went wrong on the server.' });
-});ś
+});
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found.' });
@@ -59,4 +43,4 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Studio Tasks API listening on port ${PORT}`);
-});
+});ś
