@@ -254,4 +254,4 @@ async function deleteTask(req, res) {
   }
 }
 
-module.exports = { createTask, listTasks, dailySummary, activityFeed, updateStatus };
+module.exports = { createTask, listTasks, dailySummary, activityFeed, updateStatus, deleteTask};
