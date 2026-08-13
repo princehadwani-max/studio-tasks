@@ -40,7 +40,5 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found.' });
 });
 
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`Studio Tasks API listening on port ${PORT}`);
-});ś
+// Export the Express API so Vercel can run it as a serverless function
+module.exports = app;
