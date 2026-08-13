@@ -5,7 +5,7 @@ const ROLE_OPTIONS = [
   { value: 'designer', label: 'Designer' },
   { value: 'operation_coordinator', label: 'Operation Coordinator' },
   { value: 'manager', label: 'Manager' },
-   { value: 'sales manager', label: ' Manager' },
+   { value: 'sales manager', label: 'sales Manager' },
     { value: 'MD', label: 'MD' },
      { value: 'Export Manager', label: 'Export Manager' },
 ];
