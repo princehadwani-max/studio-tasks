@@ -6,10 +6,15 @@ CREATE TABLE IF NOT EXISTS users (
   name          VARCHAR(100) NOT NULL,
   username      VARCHAR(50)  NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
-  role          VARCHAR(30)  NOT NULL CHECK (role IN ('manager', 'designer', 'operation_coordinator')),
+  role          VARCHAR(30)  NOT NULL CHECK (role IN ('MD', 'manager', 'sales manager', 'designer', 'operation_coordinator', 'export coordinator')),
   role_label    VARCHAR(50)  NOT NULL, -- e.g. "Designer 1", "Operation Coordinator 2"
   created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+
+-- Safe to re-run against an existing database: adds the column if this is
+-- an upgrade from a version of the schema that predates roster management.
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
 
 CREATE TABLE IF NOT EXISTS tasks (
   id            SERIAL PRIMARY KEY,

@@ -35,4 +35,10 @@ export const api = {
   createTask: (token, payload) => request('/tasks', { method: 'POST', body: payload, token }),
   updateStatus: (token, id, payload) =>
     request(`/tasks/${id}/status`, { method: 'PATCH', body: payload, token }),
+  deleteTask: (token, id) => request(`/tasks/${id}`, { method: 'DELETE', token }),
+  createUser: (token, payload) => request('/users', { method: 'POST', body: payload, token }),
+  setUserActive: (token, id, active) =>
+    request(`/users/${id}/active`, { method: 'PATCH', body: { active }, token }),
+  resetPassword: (token, id, password) =>
+    request(`/users/${id}/password`, { method: 'PATCH', body: { password }, token }),
 };

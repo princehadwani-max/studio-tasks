@@ -45,8 +45,11 @@ async function createTask(req, res) {
     if (assignee.rowCount === 0) {
       return res.status(404).json({ error: 'That team member does not exist.' });
     }
+    if (!assignee.rows[0].active) {
+      return res.status(400).json({ error: "You can't assign work to a removed team member." });
+    }
 
-    const codeRes = await db.query(`SELECT nextval('task_code_seq') AS n`);
+   const codeRes = await db.query(`SELECT nextval('task_code_seq') AS n`);
     const code = `TSK-${String(codeRes.rows[0].n).padStart(4, '0')}`;
 
     const { rows } = await db.query(
@@ -64,7 +67,12 @@ async function createTask(req, res) {
   }
 }
 
-// List tasks. Managers may view anyone's day; everyone else only sees their own.
+//  List tasks. Managers may view anyone's day; everyone else only sees their own.
+// A day's list includes: that day's own tasks, PLUS anything still open
+// (pending/in_progress) carried forward from earlier days, PLUS anything
+// actually wrapped on that day even if it was assigned earlier — so
+// unfinished work never quietly disappears, and finishing a carried-over
+// task shows up as completed on the day it was actually finished.
 async function listTasks(req, res) {
   const date = req.query.date || new Date().toISOString().slice(0, 10);
   const requestedUserId = req.query.userId ? Number(req.query.userId) : null;
@@ -73,7 +81,11 @@ async function listTasks(req, res) {
   const isManager = req.user.role === 'manager';
   const targetUserId = isManager ? requestedUserId : req.user.id;
 
-  const clauses = [`t.task_date = $1`];
+ const clauses = [
+    `(t.task_date = $1
+        OR (t.task_date < $1 AND t.status != 'completed')
+        OR (t.status = 'completed' AND t.completed_at::date = $1))`,
+  ];
   const params = [date];
 
   if (targetUserId) {
@@ -99,7 +111,14 @@ async function listTasks(req, res) {
 }
 
 // A rolled-up view for the manager: every team member's counts for the day,
-// used to render the roster sidebar at a glance.
+// used to render the roster sidebar at a glance. "Pending"/"in progress"
+// include anything still open from earlier days (carried forward), so the
+// sidebar reflects what's genuinely outstanding today, not just what was
+// newly assigned today. A task counts as "completed" for a given day if it
+// was actually finished that day, OR it was originally assigned that day
+// and has since been resolved — so a carried-over task shows as wrapped
+// both on the day it was finished and, historically, on the day it was
+// first assigned.
 async function dailySummary(req, res) {
   if (req.user.role !== 'manager') {
     return res.status(403).json({ error: 'Only a manager can view the team summary.' });
@@ -109,28 +128,34 @@ async function dailySummary(req, res) {
   try {
     const { rows } = await db.query(
       `SELECT u.id, u.name, u.role, u.role_label,
-              COUNT(t.id) FILTER (WHERE t.task_date = $1) AS total,
-              COUNT(t.id) FILTER (WHERE t.task_date = $1 AND t.status = 'pending') AS pending,
-              COUNT(t.id) FILTER (WHERE t.task_date = $1 AND t.status = 'in_progress') AS in_progress,
-              COUNT(t.id) FILTER (WHERE t.task_date = $1 AND t.status = 'completed') AS completed
+              COUNT(t.id) FILTER (WHERE t.status = 'pending' AND t.task_date <= $1) AS pending,
+              COUNT(t.id) FILTER (WHERE t.status = 'in_progress' AND t.task_date <= $1) AS in_progress,
+              COUNT(t.id) FILTER (
+                WHERE t.status = 'completed' AND (t.completed_at::date = $1 OR t.task_date = $1)
+              ) AS completed
        FROM users u
        LEFT JOIN tasks t ON t.assigned_to = u.id
-       WHERE u.role != 'manager'
+       WHERE u.role != 'manager' AND u.active = true
        GROUP BY u.id
        ORDER BY CASE u.role WHEN 'designer' THEN 0 ELSE 1 END, u.name`,
       [date]
     );
     return res.json({
-      summary: rows.map((r) => ({
-        id: r.id,
-        name: r.name,
-        role: r.role,
-        roleLabel: r.role_label,
-        total: Number(r.total),
-        pending: Number(r.pending),
-        inProgress: Number(r.in_progress),
-        completed: Number(r.completed),
-      })),
+      summary: rows.map((r) => {
+        const pending = Number(r.pending);
+        const inProgress = Number(r.in_progress);
+        const completed = Number(r.completed);
+        return {
+          id: r.id,
+          name: r.name,
+          role: r.role,
+          roleLabel: r.role_label,
+          total: pending + inProgress + completed,
+          pending,
+          inProgress,
+          completed,
+        };
+      }),
     });
   } catch (err) {
     console.error(err);
@@ -139,7 +164,10 @@ async function dailySummary(req, res) {
 }
 
 // Chronological activity feed for a day — "what happened, in order" —
-// so the manager can see work completed throughout the day.
+// so the manager can see work started or completed throughout the day.
+// Based on when the action actually happened, not the task's original
+// assignment date, so working on a carried-over task today shows up in
+// today's log (not buried under the day it was first assigned).
 async function activityFeed(req, res) {
   if (req.user.role !== 'manager') {
     return res.status(403).json({ error: 'Only a manager can view the activity feed.' });
@@ -149,7 +177,8 @@ async function activityFeed(req, res) {
   try {
     const { rows } = await db.query(
       `SELECT ${TASK_FIELDS} ${TASK_JOIN}
-       WHERE t.task_date = $1 AND (t.started_at IS NOT NULL OR t.completed_at IS NOT NULL)
+       WHERE (t.started_at IS NOT NULL AND t.started_at::date = $1)
+          OR (t.completed_at IS NOT NULL AND t.completed_at::date = $1)
        ORDER BY COALESCE(t.completed_at, t.started_at) DESC`,
       [date]
     );
@@ -204,6 +233,24 @@ async function updateStatus(req, res) {
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Could not update the task.' });
+  }
+}
+
+// Manager permanently deletes a task — e.g. one assigned by mistake.
+// This also removes it from the activity log, since the log is derived
+// directly from task rows.
+async function deleteTask(req, res) {
+  const { id } = req.params;
+
+  try {
+    const { rows } = await db.query(`DELETE FROM tasks WHERE id = $1 RETURNING id, code`, [id]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Task not found.' });
+    }
+    return res.json({ deleted: true, id: rows[0].id, code: rows[0].code });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Could not delete the task.' });
   }
 }
 

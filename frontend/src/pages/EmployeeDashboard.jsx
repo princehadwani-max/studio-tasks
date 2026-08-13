@@ -46,6 +46,7 @@ export default function EmployeeDashboard() {
   const todo = tasks.filter((t) => t.status !== 'completed');
   const done = tasks.filter((t) => t.status === 'completed');
   const isToday = date === todayStr();
+  const carriedOverCount = todo.filter((t) => t.taskDate && t.taskDate.slice(0, 10) < date).length;
 
   return (
     <div className="app-shell">
@@ -56,7 +57,14 @@ export default function EmployeeDashboard() {
             <div>
               <h1>{isToday ? "Today's call sheet" : 'Call sheet'}</h1>
               <div className="subtitle">
-                {todo.length} to do · {done.length} done ·{' '}
+                {todo.length} to do
+                {carriedOverCount > 0 && (
+                  <>
+                    {' '}
+                    (<span style={{ color: 'var(--amber)' }}>{carriedOverCount} from before</span>)
+                  </>
+                )}{' '}
+                · {done.length} done ·{' '}
                 <input
                   type="date"
                   value={date}
@@ -81,7 +89,7 @@ export default function EmployeeDashboard() {
             </div>
           )}
 
-          {!loading && todo.length > 0 && (
+         {!loading && todo.length > 0 && (
             <>
               <div className="board-col-head" style={{ marginTop: 4 }}>
                 <span className="dot" style={{ background: 'var(--amber)' }} />
@@ -90,7 +98,14 @@ export default function EmployeeDashboard() {
               </div>
               <div className="board-col-body" style={{ marginBottom: 28 }}>
                 {todo.map((t) => (
-                  <TaskCard key={t.id} task={t} interactive onUpdateStatus={handleUpdate} busy={busyId === t.id} />
+                  <TaskCard
+                    key={t.id}
+                    task={t}
+                    interactive
+                    onUpdateStatus={handleUpdate}
+                    busy={busyId === t.id}
+                    viewingDate={date}
+                  />
                 ))}
               </div>
             </>

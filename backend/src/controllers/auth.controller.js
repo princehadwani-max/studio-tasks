@@ -25,6 +25,10 @@ async function login(req, res) {
       return res.status(401).json({ error: 'Incorrect username or password.' });
     }
 
+    if (!user.active) {
+      return res.status(403).json({ error: 'This account has been deactivated. Contact your manager.' });
+    }
+
     const payload = {
       id: user.id,
       name: user.name,

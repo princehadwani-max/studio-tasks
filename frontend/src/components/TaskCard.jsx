@@ -7,9 +7,25 @@ function formatTime(iso) {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function TaskCard({ task, showAssignee = false, interactive = false, onUpdateStatus, busy }) {
+function formatShortDate(dateStr) {
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+export default function TaskCard({ 
+  task,
+  showAssignee = false,
+  interactive = false,
+  onUpdateStatus,
+  busy,
+  onDelete,
+  deleting,
+  viewingDate,
+ }) {
   const [showNoteField, setShowNoteField] = useState(false);
   const [note, setNote] = useState('');
+
+  const taskDateStr = task.taskDate ? task.taskDate.slice(0, 10) : null;
+  const isCarriedOver = Boolean(viewingDate && taskDateStr && taskDateStr < viewingDate);
 
   const handleStart = () => onUpdateStatus(task.id, { status: 'in_progress' });
 
@@ -19,13 +35,37 @@ export default function TaskCard({ task, showAssignee = false, interactive = fal
     setNote('');
   };
 
+  const handleDelete = () => {
+    if (window.confirm(`Delete ${task.code} — "${task.title}"? This can't be undone.`)) {
+      onDelete(task.id);
+    }
+  };
+
   return (
     <div className={`task-card status-${task.status}`}>
       <div className="task-card-top">
         <span className="task-code">{task.code}</span>
-        <span className={`priority-flag ${task.priority}`}>{task.priority}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span className={`priority-flag ${task.priority}`}>{task.priority}</span>
+          {onDelete && (
+            <button
+              type="button"
+              className="task-delete-btn"
+              onClick={handleDelete}
+              disabled={deleting}
+              title="Delete task"
+              aria-label="Delete task"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
+      {isCarriedOver && (
+        <div className="carried-badge">Carried from {formatShortDate(taskDateStr)}</div>
+      )}
+      
       <div className="task-title">{task.title}</div>
       {task.description && <div className="task-desc">{task.description}</div>}
 

@@ -60,9 +60,8 @@ export default function LoginPage() {
           </form>
 
           <div className="login-hint">
-            Team: deep · hardeek · yogesh · kamlesh · swati · hasumati
-            <br />
-            Default password is set during setup — see README.
+            Don't have login details, or forgot your password? Ask your manager —
+            they can look up your username or set a new password for you.
           </div>
         </div>
       </div>

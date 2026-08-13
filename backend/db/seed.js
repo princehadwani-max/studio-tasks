@@ -9,12 +9,24 @@ const DEFAULT_PASSWORD = 'studio123'; // ⚠ change after first login — see RE
 
 const USERS = [
   { name: 'Deep',     username: 'deep',     role: 'manager',              role_label: 'Manager' },
+  { name: 'JayBhai',     username: 'Jaybhai',     role: 'MD',              role_label: 'MD' },
+  { name: 'Rutvik',     username: 'Rutvik',     role: 'Sales manager ',              role_label: 'Sales Manager 1' },
+  { name: 'Milan P',     username: 'Milan P',     role: 'Sales manager',              role_label: 'Sales Manager 2' },
+  { name: 'Sujit',     username: 'deep',     role: 'Sales manager',              role_label: 'Sales Manager 3' },
+  { name: 'Milan U',     username: 'deep',     role: 'Sales manager',              role_label: 'Sales Manager 4' },
+  
+  { name: 'Divyraj',     username: 'divyraj',     role: 'export_coordinator',              role_label: 'export_coordinator' },
+  { name: 'Harshal',     username: 'Harshal',     role: 'export_coordinator',              role_label: 'export_coordinator' },
+  
   { name: 'Hardeek',  username: 'hardeek',  role: 'designer',             role_label: 'Designer 1' },
   { name: 'Yogesh',   username: 'yogesh',   role: 'designer',             role_label: 'Designer 2' },
   { name: 'Kamlesh',  username: 'kamlesh',  role: 'operation_coordinator', role_label: 'Operation Coordinator 1' },
   { name: 'Swati',    username: 'swati',    role: 'operation_coordinator', role_label: 'Operation Coordinator 2' },
   { name: 'Hasumati', username: 'hasumati', role: 'operation_coordinator', role_label: 'Operation Coordinator 3' },
-];
+  { name: 'Vidhi',    username: 'Vidhi',    role: 'operation_coordinator', role_label: 'Operation Coordinator 4' },
+  { name: 'Kishan',    username: 'Kishan',    role: 'operation_coordinator', role_label: 'Operation Coordinator 5' },
+  { name: 'Raj',    username: 'Raj',    role: 'operation_coordinator', role_label: 'Operation Coordinator 6' },
+ ];
 
 async function main() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });

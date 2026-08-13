@@ -6,6 +6,7 @@ import RosterSidebar from '../components/RosterSidebar.jsx';
 import TaskCard from '../components/TaskCard.jsx';
 import AssignTaskForm from '../components/AssignTaskForm.jsx';
 import ActivityLog from '../components/ActivityLog.jsx';
+import TeamPanel from '../components/TeamPanel.jsx';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
@@ -26,10 +27,12 @@ export default function ManagerDashboard() {
   const [summary, setSummary] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [activity, setActivity] = useState([]);
+  const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);
   const [assignError, setAssignError] = useState('');
   const [assignSuccess, setAssignSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -38,10 +41,12 @@ export default function ManagerDashboard() {
         api.summary(token, date),
         api.listTasks(token, { date, userId: selectedUserId || undefined }),
         api.activity(token, date),
+        api.listUsers(token),
       ]);
       setSummary(summaryRes.summary);
       setTasks(tasksRes.tasks);
       setActivity(activityRes.activity);
+      setTeam(teamRes.users);
     } catch (err) {
       console.error(err);
     } finally {
@@ -70,7 +75,36 @@ export default function ManagerDashboard() {
     }
   };
 
+  const handleDeleteTask = async (id) => {
+    setDeletingId(id);
+    try {
+      await api.deleteTask(token, id);
+      await loadAll();
+    } catch (err) {
+      console.error(err);
+      window.alert(err.message || 'Could not delete the task.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleCreateUser = async (payload) => {
+    const { user } = await api.createUser(token, payload);
+    await loadAll();
+    return user;
+  };
+
+  const handleSetActive = async (id, active) => {
+    await api.setUserActive(token, id, active);
+    await loadAll();
+  };
+
+  const handleResetPassword = async (id, password) => {
+    await api.resetPassword(token, id, password);
+  };
+
   const columnTasks = (statusKey) => tasks.filter((t) => t.status === statusKey);
+  const carriedOverCount = tasks.filter((t) => t.taskDate && t.taskDate.slice(0, 10) < date).length;
 
   return (
     <div className="app-shell">
@@ -87,7 +121,14 @@ export default function ManagerDashboard() {
                   : "Today's board"}
               </h1>
               <div className="subtitle">
-                {tasks.length} task{tasks.length === 1 ? '' : 's'} ·{' '}
+                {tasks.length} task{tasks.length === 1 ? '' : 's'}
+                {carriedOverCount > 0 && (
+                  <>
+                    {' '}
+                    · <span style={{ color: 'var(--amber)' }}>{carriedOverCount} carried over</span>
+                  </>
+                )}{' '}
+                ·{' '}
                 <input
                   type="date"
                   value={date}
@@ -115,12 +156,15 @@ export default function ManagerDashboard() {
               >
                 Activity log
               </button>
+              <button className={`tab-btn ${tab === 'team' ? 'active' : ''}`} onClick={() => setTab('team')}>
+                Team
+              </button>
             </div>
           </div>
 
           {loading && <p style={{ color: 'var(--text-faint)' }}>Loading…</p>}
 
-          {!loading && tab === 'board' && (
+           {!loading && tab === 'board' && (
             <div className="board">
               {COLUMNS.map((col) => {
                 const items = columnTasks(col.key);
@@ -134,7 +178,15 @@ export default function ManagerDashboard() {
                     <div className="board-col-body">
                       {items.length === 0 && <div className="empty-col">No tasks here</div>}
                       {items.map((t) => (
-                        <TaskCard key={t.id} task={t} showAssignee interactive={false} />
+                        <TaskCard
+                          key={t.id}
+                          task={t}
+                          showAssignee
+                          interactive={false}
+                          onDelete={handleDeleteTask}
+                          deleting={deletingId === t.id}
+                          viewingDate={date}
+                        />
                       ))}
                     </div>
                   </div>
@@ -154,6 +206,16 @@ export default function ManagerDashboard() {
           )}
 
           {!loading && tab === 'activity' && <ActivityLog activity={activity} />}
+        
+          {!loading && tab === 'team' && (
+            <TeamPanel
+              team={team}
+              currentUserId={session.user.id}
+              onCreate={handleCreateUser}
+              onSetActive={handleSetActive}
+              onResetPassword={handleResetPassword}
+            />
+          )}
         </main>
       </div>
     </div>
