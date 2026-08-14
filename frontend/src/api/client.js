@@ -19,7 +19,7 @@ async function request(path, { method = 'GET', body, token } = {}) {
 }
 
 export const api = {
-  login: (username, password) => request('/auth/login', { method: 'POST', body: { username, password } }),
+  login: (username, password) => request('/auth/login', { method: 'POST', body: { username, password } }),  
   me: (token) => request('/auth/me', { token }),
   listUsers: (token) => request('/users', { token }),
   listTasks: (token, { date, userId, status } = {}) => {
