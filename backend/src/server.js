@@ -8,129 +8,37 @@ const taskRoutes = require('./routes/task.routes');
 
 const app = express();
 
-/* =========================
-   CORS CONFIGURATION
-========================= */
-
-const allowedOrigins = [
-  process.env.CORS_ORIGIN,
-  'http://localhost:4000',
-  'http://localhost:3000'
-].filter(Boolean);
-
+// --- SIMPLIFIED CORS CONFIGURATION ---
 const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests without an Origin header
-    // (Postman, server-to-server, etc.)
-    if (!origin) {
-      return callback(null, true);
-    }
-
-    // Allow your exact frontend URL
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    // Allow Vercel preview/production frontend URLs
-    if (
-      /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(origin)
-    ) {
-      return callback(null, true);
-    }
-
-    return callback(new Error(`CORS blocked: ${origin}`));
-  },
-
-  credentials: true,
-
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-
-  allowedHeaders: [
-    'Origin',
-    'X-Requested-With',
-    'Content-Type',
-    'Accept',
-    'Authorization'
+  origin: [
+    process.env.CORS_ORIGIN || 'https://studio-tasks-frontend.vercel.app', 
+    /\.vercel\.app$/, // Regex: Safely allows ANY domain ending in .vercel.app
+    'http://localhost:3000'
   ],
-
-  optionsSuccessStatus: 204
+  credentials: true
 };
 
-// CORS middleware
 app.use(cors(corsOptions));
-
-// Explicitly handle ALL preflight requests
-app.options(/.*/, cors(corsOptions));
-
-/* =========================
-   BODY PARSER
-========================= */
+app.options('*', cors(corsOptions)); // Explicitly handle preflight OPTIONS requests
+// -------------------------------------
 
 app.use(express.json());
 
-/* =========================
-   HEALTH CHECK
-========================= */
-
-app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    ok: true,
-    message: 'Studio Tasks API is running'
-  });
-});
-
-/* =========================
-   API ROUTES
-========================= */
+app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/tasks', taskRoutes);
 
-/* =========================
-   ERROR HANDLER
-========================= */
-
+// Fallback error handler
 app.use((err, req, res, next) => {
-  console.error('SERVER ERROR:', err);
-
-  if (err.message && err.message.startsWith('CORS blocked:')) {
-    return res.status(403).json({
-      error: 'CORS blocked',
-      origin: req.headers.origin
-    });
-  }
-
-  res.status(500).json({
-    error: 'Something went wrong on the server.'
-  });
+  console.error(err);
+  res.status(500).json({ error: 'Something went wrong on the server.' });
 });
-
-/* =========================
-   404 HANDLER
-========================= */
 
 app.use((req, res) => {
-  res.status(404).json({
-    error: 'Not found.',
-    path: req.originalUrl
-  });
+  res.status(404).json({ error: 'Not found.' });
 });
 
-/* =========================
-   LOCAL DEVELOPMENT
-========================= */
-
-const PORT = process.env.PORT || 4000;
-
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => {
-    console.log(`Studio Tasks API listening on port ${PORT}`);
-  });
-}
-
-/* =========================
-   VERCEL
-========================= */
-
+// Export the Express API so Vercel can run it as a serverless function
 module.exports = app;
