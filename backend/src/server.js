@@ -13,7 +13,8 @@ const corsOptions = {
   origin: [
     process.env.CORS_ORIGIN || 'https://studio-tasks-frontend.vercel.app', 
     /\.vercel\.app$/, // Regex: Safely allows ANY domain ending in .vercel.app
-    'http://localhost:3000'
+    'http://localhost:3000',
+    'http://localhost:4000'
   ],
   credentials: true
 };
@@ -38,6 +39,11 @@ app.use((err, req, res, next) => {
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found.' });
+});
+
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+  console.log(`Studio Tasks API listening on port ${PORT}`);
 });
 
 // Export the Express API so Vercel can run it as a serverless function
