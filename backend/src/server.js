@@ -8,20 +8,7 @@ const taskRoutes = require('./routes/task.routes');
 
 const app = express();
 
-// --- SIMPLIFIED CORS CONFIGURATION ---
-const corsOptions = {
-  origin: [
-    process.env.CORS_ORIGIN || 'https://studio-tasks-frontend.vercel.app', 
-    /\.vercel\.app$/, // Regex: Safely allows ANY domain ending in .vercel.app
-    'http://localhost:3000'
-  ],
-  credentials: true
-};
-
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Explicitly handle preflight OPTIONS requests
-// -------------------------------------
-
+app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
 app.use(express.json());
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
@@ -40,5 +27,7 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found.' });
 });
 
-// Export the Express API so Vercel can run it as a serverless function
-module.exports = app;
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+  console.log(`Studio Tasks API listening on port ${PORT}`);
+});
