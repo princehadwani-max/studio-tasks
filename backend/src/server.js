@@ -13,14 +13,13 @@ const corsOptions = {
   origin: [
     process.env.CORS_ORIGIN || 'https://studio-tasks-frontend.vercel.app', 
     /\.vercel\.app$/, // Regex: Safely allows ANY domain ending in .vercel.app
-    'http://localhost:3000',
     'http://localhost:4000'
   ],
   credentials: true
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Explicitly handle preflight OPTIONS requests
+// app.options('*', cors(corsOptions)); // Explicitly handle preflight OPTIONS requests
 // -------------------------------------
 
 app.use(express.json());
