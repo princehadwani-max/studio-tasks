@@ -41,7 +41,7 @@ async function createTask(req, res) {
   }
 
   try {
-    const assignee = await db.query(`SELECT id FROM users WHERE id = $1`, [assignedTo]);
+    const assignee = await db.query(`SELECT id, active FROM users WHERE id = $1`, [assignedTo]);
     if (assignee.rowCount === 0) {
       return res.status(404).json({ error: 'That team member does not exist.' });
     }

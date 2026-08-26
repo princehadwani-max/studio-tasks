@@ -7,7 +7,7 @@ const userRoutes = require('./routes/user.routes');
 const taskRoutes = require('./routes/task.routes');
 
 const app = express();
-
+  
 const corsOptions = {
   origin: process.env.CORS_ORIGIN,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
