@@ -12,7 +12,7 @@ async function login(req, res) {
 
   try {
     const { rows } = await db.query(
-      `SELECT id, name, username, password_hash, role, role_label, active FROM users WHERE username = $1`,
+      `SELECT id, name, username, phone, password_hash, role, role_label, active FROM users WHERE username = $1`,
       [username.toLowerCase().trim()]
     );
 
@@ -35,6 +35,7 @@ async function login(req, res) {
       id: user.id,
       name: user.name,
       username: user.username,
+      phone: user.phone || '',
       role: user.role,
       role_label: user.role_label,
     };

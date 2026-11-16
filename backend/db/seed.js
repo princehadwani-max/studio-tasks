@@ -8,40 +8,58 @@ const { Pool } = require('pg');
 const DEFAULT_PASSWORD = 'studio123'; // ⚠ change after first login — see README
 
 const USERS = [
-  { name: 'Deep',     username: 'deep',     role: 'manager',              role_label: 'Manager' },
-  { name: 'JayBhai',     username: 'Jaybhai',     role: 'MD',              role_label: 'MD' },
-  { name: 'Rutvik',     username: 'Rutvik',     role: 'Sales manager ',              role_label: 'Sales Manager 1' },
-  { name: 'Milan P',     username: 'Milan P',     role: 'Sales manager',              role_label: 'Sales Manager 2' },
-  { name: 'Sujit',     username: 'deep',     role: 'Sales manager',              role_label: 'Sales Manager 3' },
-  { name: 'Milan U',     username: 'deep',     role: 'Sales manager',              role_label: 'Sales Manager 4' },
-  
-  { name: 'Divyraj',     username: 'divyraj',     role: 'export_coordinator',              role_label: 'export_coordinator' },
-  { name: 'Harshal',     username: 'Harshal',     role: 'export_coordinator',              role_label: 'export_coordinator' },
-  
-  { name: 'Hardeek',  username: 'hardeek',  role: 'designer',             role_label: 'Designer 1' },
-  { name: 'Yogesh',   username: 'yogesh',   role: 'designer',             role_label: 'Designer 2' },
-  { name: 'Kamlesh',  username: 'kamlesh',  role: 'operation_coordinator', role_label: 'Operation Coordinator 1' },
-  { name: 'Swati',    username: 'swati',    role: 'operation_coordinator', role_label: 'Operation Coordinator 2' },
-  { name: 'Hasumati', username: 'hasumati', role: 'operation_coordinator', role_label: 'Operation Coordinator 3' },
-  { name: 'Vidhi',    username: 'Vidhi',    role: 'operation_coordinator', role_label: 'Operation Coordinator 4' },
-  { name: 'Kishan',    username: 'Kishan',    role: 'operation_coordinator', role_label: 'Operation Coordinator 5' },
-  { name: 'Raj',    username: 'Raj',    role: 'operation_coordinator', role_label: 'Operation Coordinator 6' },
- ];
+  { name: 'Prince', username: 'prince', phone: '9876543201', role: 'admin', role_label: 'Admin' },
+  { name: 'Deep', username: 'deep', phone: '9876543202', role: 'manager', role_label: 'Manager' },
+  { name: 'JayBhai', username: 'jaybhai', phone: '9876543203', role: 'MD', role_label: 'MD' },
+  { name: 'Rutvik', username: 'rutvik', phone: '9876543204', role: 'sales manager', role_label: 'Sales Manager 1' },
+  { name: 'Milan P', username: 'milan.p', phone: '9876543205', role: 'sales manager', role_label: 'Sales Manager 2' },
+  { name: 'Sujit', username: 'sujit', phone: '9876543206', role: 'sales manager', role_label: 'Sales Manager 3' },
+  { name: 'Milan U', username: 'milan.u', phone: '9876543207', role: 'sales manager', role_label: 'Sales Manager 4' },
+
+  { name: 'Divyraj', username: 'divyraj', phone: '9876543208', role: 'export_coordinator', role_label: 'Export Coordinator 1' },
+  { name: 'Harshal', username: 'harshal', phone: '9876543209', role: 'export_coordinator', role_label: 'Export Coordinator 2' },
+
+  { name: 'Hardeek', username: 'hardeek', phone: '9876543210', role: 'designer', role_label: 'Designer 1' },
+  { name: 'Yogesh', username: 'yogesh', phone: '9876543211', role: 'designer', role_label: 'Designer 2' },
+  { name: 'Kamlesh', username: 'kamlesh', phone: '9876543212', role: 'operation_coordinator', role_label: 'Operation Coordinator 1' },
+  { name: 'Swati', username: 'swati', phone: '9876543213', role: 'operation_coordinator', role_label: 'Operation Coordinator 2' },
+  { name: 'Hasumati', username: 'hasumati', phone: '9876543214', role: 'operation_coordinator', role_label: 'Operation Coordinator 3' },
+  { name: 'Vidhi', username: 'vidhi', phone: '9876543215', role: 'operation_coordinator', role_label: 'Operation Coordinator 4' },
+  { name: 'Kishan', username: 'kishan', phone: '9876543216', role: 'operation_coordinator', role_label: 'Operation Coordinator 5' },
+  { name: 'Raj', username: 'raj', phone: '9876543217', role: 'operation_coordinator', role_label: 'Operation Coordinator 6' },
+];
 
 async function main() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
 
   try {
+    // Normalize any legacy uppercase/spaced usernames before upserting
+    await pool.query(`
+      UPDATE users
+      SET username = LOWER(REPLACE(TRIM(username), ' ', '.'))
+      WHERE username != LOWER(REPLACE(TRIM(username), ' ', '.'))
+        AND NOT EXISTS (
+          SELECT 1 FROM users u2
+          WHERE u2.username = LOWER(REPLACE(TRIM(users.username), ' ', '.'))
+            AND u2.id != users.id
+        )
+    `);
+
     const idByUsername = {};
 
     for (const u of USERS) {
       const res = await pool.query(
-        `INSERT INTO users (name, username, password_hash, role, role_label)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (username) DO UPDATE SET name = EXCLUDED.name, role = EXCLUDED.role, role_label = EXCLUDED.role_label
+        `INSERT INTO users (name, username, password_hash, phone, role, role_label, active)
+         VALUES ($1, $2, $3, $4, $5, $6, true)
+         ON CONFLICT (username) DO UPDATE
+           SET name = EXCLUDED.name,
+               phone = CASE WHEN users.phone IS NULL OR users.phone = '' THEN EXCLUDED.phone ELSE users.phone END,
+               role = EXCLUDED.role,
+               role_label = EXCLUDED.role_label,
+               active = true
          RETURNING id, username`,
-        [u.name, u.username, passwordHash, u.role, u.role_label]
+        [u.name, u.username, passwordHash, u.phone, u.role, u.role_label]
       );
       idByUsername[res.rows[0].username] = res.rows[0].id;
     }
@@ -66,8 +84,17 @@ async function main() {
       console.log('… Sample task TSK-0001 already exists, skipping.');
     }
 
-    // Keep the code sequence ahead of any manually-numbered seed tasks above.
-    await pool.query(`SELECT setval('task_code_seq', 1, true)`);
+    // Keep the code sequence ahead of any existing tasks in the database.
+    await pool.query(`
+      SELECT setval(
+        'task_code_seq',
+        GREATEST(
+          COALESCE((SELECT MAX( NULLIF(REGEXP_REPLACE(code, '[^0-9]', '', 'g'), '')::int ) FROM tasks), 1),
+          1
+        ),
+        true
+      )
+    `);
 
     console.log(`\nAll seeded accounts share the password: "${DEFAULT_PASSWORD}"`);
     console.log('Please change these after first login (see README).');

@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../api/client.js';
 import TopBar from '../components/TopBar.jsx';
 import TaskCard from '../components/TaskCard.jsx';
+import RoutineSidebar from '../components/RoutineSidebar.jsx';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
@@ -12,14 +13,19 @@ export default function EmployeeDashboard() {
 
   const [date, setDate] = useState(todayStr());
   const [tasks, setTasks] = useState([]);
+  const [routines, setRoutines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { tasks } = await api.listTasks(token, { date });
-      setTasks(tasks);
+      const [tasksRes, routinesRes] = await Promise.all([
+        api.listTasks(token, { date }),
+        api.listRoutines(token),
+      ]);
+      setTasks(tasksRes.tasks);
+      setRoutines(routinesRes.routines);
     } catch (err) {
       console.error(err);
     } finally {
@@ -41,6 +47,16 @@ export default function EmployeeDashboard() {
     } finally {
       setBusyId(null);
     }
+  };
+
+  const handleToggleRoutine = async (id) => {
+    await api.toggleRoutine(token, id);
+    await load();
+  };
+
+  const handleAddRemark = async (id, remark) => {
+    await api.addTaskRemark(token, id, remark);
+    await load();
   };
 
   const todo = tasks.filter((t) => t.status !== 'completed');
@@ -103,6 +119,7 @@ export default function EmployeeDashboard() {
                     task={t}
                     interactive
                     onUpdateStatus={handleUpdate}
+                    onAddRemark={handleAddRemark}
                     busy={busyId === t.id}
                     viewingDate={date}
                   />
@@ -120,12 +137,24 @@ export default function EmployeeDashboard() {
               </div>
               <div className="board-col-body">
                 {done.map((t) => (
-                  <TaskCard key={t.id} task={t} interactive={false} />
+                  <TaskCard
+                    key={t.id}
+                    task={t}
+                    interactive={false}
+                    onAddRemark={handleAddRemark}
+                  />
                 ))}
               </div>
             </>
           )}
         </main>
+
+        <RoutineSidebar
+          routines={routines}
+          currentUser={session.user}
+          canAssign={false}
+          onToggleRoutine={handleToggleRoutine}
+        />
       </div>
     </div>
   );

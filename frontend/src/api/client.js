@@ -35,10 +35,24 @@ export const api = {
   createTask: (token, payload) => request('/tasks', { method: 'POST', body: payload, token }),
   updateStatus: (token, id, payload) =>
     request(`/tasks/${id}/status`, { method: 'PATCH', body: payload, token }),
+  addTaskRemark: (token, id, remark) =>
+    request(`/tasks/${id}/remarks`, { method: 'POST', body: { remark }, token }),
   deleteTask: (token, id) => request(`/tasks/${id}`, { method: 'DELETE', token }),
   createUser: (token, payload) => request('/users', { method: 'POST', body: payload, token }),
   setUserActive: (token, id, active) =>
     request(`/users/${id}/active`, { method: 'PATCH', body: { active }, token }),
+  updateUserPhone: (token, id, phone) =>
+    request(`/users/${id}/phone`, { method: 'PATCH', body: { phone }, token }),
   resetPassword: (token, id, password) =>
     request(`/users/${id}/password`, { method: 'PATCH', body: { password }, token }),
+  listRoutines: (token, { userId, frequency } = {}) => {
+    const params = new URLSearchParams();
+    if (userId) params.set('userId', userId);
+    if (frequency) params.set('frequency', frequency);
+    const qs = params.toString();
+    return request(`/routines${qs ? `?${qs}` : ''}`, { token });
+  },
+  createRoutine: (token, payload) => request('/routines', { method: 'POST', body: payload, token }),
+  toggleRoutine: (token, id) => request(`/routines/${id}/toggle`, { method: 'PATCH', token }),
+  deleteRoutine: (token, id) => request(`/routines/${id}`, { method: 'DELETE', token }),
 };

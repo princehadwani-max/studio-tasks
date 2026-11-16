@@ -5,6 +5,7 @@ const {
   dailySummary,
   activityFeed,
   updateStatus,
+  addRemark,
   deleteTask,
 } = require('../controllers/task.controller');
 const { requireAuth, requireRole } = require('../middleware/auth');
@@ -14,11 +15,14 @@ const router = express.Router();
 
 router.use(requireAuth);
 
+const DASHBOARD_ROLES = ['admin', 'MD', 'manager', 'sales manager', 'sales_manager'];
+
 router.get('/', listTasks);
-router.post('/', requireRole('manager'), createTask);
-router.get('/summary', requireRole('manager'), dailySummary);
-router.get('/activity', requireRole('manager'), activityFeed);
+router.post('/', requireRole(...DASHBOARD_ROLES), createTask);
+router.get('/summary', requireRole(...DASHBOARD_ROLES), dailySummary);
+router.get('/activity', requireRole(...DASHBOARD_ROLES), activityFeed);
 router.patch('/:id/status', updateStatus);
-router.delete('/:id', requireRole('manager'), deleteTask);
+router.post('/:id/remarks', addRemark);
+router.delete('/:id', requireRole(...DASHBOARD_ROLES), deleteTask);
 
 module.exports = router;

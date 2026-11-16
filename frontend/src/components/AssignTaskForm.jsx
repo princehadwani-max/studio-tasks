@@ -1,9 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 export default function AssignTaskForm({ team, onSubmit, submitting, error, success }) {
   const [assignedTo, setAssignedTo] = useState(team[0]?.id || '');
+
+  useEffect(() => {
+    if (team.length > 0 && !team.some((p) => String(p.id) === String(assignedTo))) {
+      setAssignedTo(team[0].id);
+    }
+  }, [team, assignedTo]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [taskDate, setTaskDate] = useState(todayStr());

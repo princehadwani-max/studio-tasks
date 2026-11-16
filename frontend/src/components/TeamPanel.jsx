@@ -5,14 +5,18 @@ const ROLE_OPTIONS = [
   { value: 'designer', label: 'Designer' },
   { value: 'operation_coordinator', label: 'Operation Coordinator' },
   { value: 'manager', label: 'Manager' },
-   { value: 'sales manager', label: 'sales Manager' },
-    { value: 'MD', label: 'MD' },
-     { value: 'Export Manager', label: 'Export Manager' },
+  { value: 'sales manager', label: 'Sales Manager' },
+  { value: 'MD', label: 'MD' },
+  { value: 'export_coordinator', label: 'Export Coordinator' },
 ];
 
-function AddPersonForm({ onCreate }) {
+function AddPersonForm({ onCreate, isAdmin }) {
+  const roleOptions = isAdmin
+    ? [...ROLE_OPTIONS, { value: 'admin', label: 'Admin' }]
+    : ROLE_OPTIONS;
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('designer');
   const [roleLabel, setRoleLabel] = useState('');
@@ -24,8 +28,8 @@ function AddPersonForm({ onCreate }) {
     e.preventDefault();
     setError('');
     setSuccess('');
-    if (!name.trim() || !username.trim() || !password) {
-      setError('Name, username, and password are required.');
+    if (!name.trim() || !username.trim() || !phone.trim() || !password) {
+      setError('Name, username, phone number, and password are required.');
       return;
     }
     setSubmitting(true);
@@ -33,6 +37,7 @@ function AddPersonForm({ onCreate }) {
       const created = await onCreate({
         name: name.trim(),
         username: username.trim().toLowerCase(),
+        phone: phone.trim(),
         password,
         role,
         roleLabel: roleLabel.trim() || undefined,
@@ -40,6 +45,7 @@ function AddPersonForm({ onCreate }) {
       setSuccess(`${created.name} was added to the team.`);
       setName('');
       setUsername('');
+      setPhone('');
       setPassword('');
       setRoleLabel('');
       setRole('designer');
@@ -58,24 +64,53 @@ function AddPersonForm({ onCreate }) {
       <form onSubmit={handleSubmit}>
         <div className="field-row">
           <div className="field">
-            <label>Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. swati" />
+            <label>Name *</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Swati"
+              required
+            />
           </div>
           <div className="field">
-            <label>Username</label>
+            <label>Username *</label>
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="e.g. swati"
               autoComplete="off"
+              required
             />
           </div>
         </div>
         <div className="field-row">
           <div className="field">
-            <label>Role</label>
+            <label>Phone number *</label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="e.g. 9876543210"
+              required
+            />
+          </div>
+          <div className="field">
+            <label>Temporary password *</label>
+            <input
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="At least 6 characters"
+              autoComplete="off"
+              required
+            />
+          </div>
+        </div>
+        <div className="field-row">
+          <div className="field">
+            <label>Role *</label>
             <select value={role} onChange={(e) => setRole(e.target.value)}>
-              {ROLE_OPTIONS.map((r) => (
+              {roleOptions.map((r) => (
                 <option key={r.value} value={r.value}>
                   {r.label}
                 </option>
@@ -90,16 +125,6 @@ function AddPersonForm({ onCreate }) {
               placeholder="e.g. Operation Coordinator 3"
             />
           </div>
-        </div>
-        <div className="field">
-          <label>Temporary password</label>
-          <input
-            type="text"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 6 characters"
-            autoComplete="off"
-          />
         </div>
         <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>
           {submitting ? 'Adding…' : 'Add to team'}
@@ -178,10 +203,83 @@ function PasswordRow({ person, onResetPassword }) {
   );
 }
 
-export default function TeamPanel({ team, currentUserId, onCreate, onSetActive, onResetPassword }) {
+function PhoneRow({ person, onUpdatePhone }) {
+  const [open, setOpen] = useState(false);
+  const [phone, setPhone] = useState(person.phone || '');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!phone.trim()) {
+      setError('Phone number is required.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await onUpdatePhone(person.id, phone.trim());
+      setOpen(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button className="btn btn-ghost btn-sm" onClick={() => setOpen(true)}>
+        Edit phone
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 200 }}>
+      {error && <div className="form-error" style={{ padding: '6px 10px', fontSize: 12 }}>{error}</div>}
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input
+          autoFocus
+          type="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="Phone number"
+          style={{
+            flex: 1,
+            background: 'var(--surface-2)',
+            border: '1px solid var(--border)',
+            borderRadius: 6,
+            color: 'var(--text)',
+            padding: '6px 8px',
+            font: 'inherit',
+            fontSize: 12.5,
+          }}
+        />
+        <button className="btn btn-teal btn-sm" type="submit" disabled={submitting}>
+          Save
+        </button>
+        <button className="btn btn-ghost btn-sm" type="button" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export default function TeamPanel({
+  team,
+  currentUserId,
+  currentUserRole,
+  onCreate,
+  onSetActive,
+  onUpdatePhone,
+  onResetPassword,
+}) {
   const [busyId, setBusyId] = useState(null);
   const [rowError, setRowError] = useState({});
 
+  const isAdmin = currentUserRole === 'admin' || currentUserRole === 'MD';
   const active = team.filter((p) => p.active);
   const removed = team.filter((p) => !p.active);
 
@@ -203,46 +301,58 @@ export default function TeamPanel({ team, currentUserId, onCreate, onSetActive, 
     }
   };
 
-  const renderRow = (person) => (
-    <div key={person.id} className="team-row">
-      <Avatar name={person.name} role={person.role} />
-      <div className="info">
-        <div className="r-name">
-          {person.name}
-          {person.id === currentUserId && <span className="you-tag">you</span>}
+  const renderRow = (person) => {
+    const isProtectedAdmin = !isAdmin && (person.role === 'admin' || person.role === 'MD');
+    return (
+      <div key={person.id} className="team-row">
+        <Avatar name={person.name} role={person.role} />
+        <div className="info">
+          <div className="r-name">
+            {person.name}
+            {person.id === currentUserId && <span className="you-tag">you</span>}
+          </div>
+          <div className="r-role">
+            {person.role_label} · @{person.username} · 📞 {person.phone || 'Not set'}
+          </div>
+          {rowError[person.id] && <div className="team-row-error">{rowError[person.id]}</div>}
         </div>
-        <div className="r-role">
-          {person.role_label} · @{person.username}
+        <div className="team-row-actions">
+          {!isProtectedAdmin && onUpdatePhone && (
+            <PhoneRow person={person} onUpdatePhone={onUpdatePhone} />
+          )}
+          {!isProtectedAdmin && <PasswordRow person={person} onResetPassword={onResetPassword} />}
+          {person.active ? (
+            <button
+              className="btn btn-ghost btn-sm btn-danger-text"
+              disabled={busyId === person.id || person.id === currentUserId || isProtectedAdmin}
+              onClick={() => handleToggleActive(person, false)}
+              title={
+                person.id === currentUserId
+                  ? "You can't remove your own account."
+                  : isProtectedAdmin
+                  ? 'Managers cannot remove an admin.'
+                  : 'Remove from team'
+              }
+            >
+              Remove
+            </button>
+          ) : (
+            <button
+              className="btn btn-teal btn-sm"
+              disabled={busyId === person.id || isProtectedAdmin}
+              onClick={() => handleToggleActive(person, true)}
+            >
+              Restore
+            </button>
+          )}
         </div>
-        {rowError[person.id] && <div className="team-row-error">{rowError[person.id]}</div>}
       </div>
-      <div className="team-row-actions">
-        <PasswordRow person={person} onResetPassword={onResetPassword} />
-        {person.active ? (
-          <button
-            className="btn btn-ghost btn-sm btn-danger-text"
-            disabled={busyId === person.id || person.id === currentUserId}
-            onClick={() => handleToggleActive(person, false)}
-            title={person.id === currentUserId ? "You can't remove your own account." : 'Remove from team'}
-          >
-            Remove
-          </button>
-        ) : (
-          <button
-            className="btn btn-teal btn-sm"
-            disabled={busyId === person.id}
-            onClick={() => handleToggleActive(person, true)}
-          >
-            Restore
-          </button>
-        )}
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div>
-      <AddPersonForm onCreate={onCreate} />
+      <AddPersonForm onCreate={onCreate} isAdmin={isAdmin} />
 
       <h3 style={{ margin: '22px 0 12px' }}>On the team</h3>
       <div className="team-list">{active.map(renderRow)}</div>

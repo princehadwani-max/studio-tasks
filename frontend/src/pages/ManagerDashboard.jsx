@@ -7,6 +7,7 @@ import TaskCard from '../components/TaskCard.jsx';
 import AssignTaskForm from '../components/AssignTaskForm.jsx';
 import ActivityLog from '../components/ActivityLog.jsx';
 import TeamPanel from '../components/TeamPanel.jsx';
+import RoutineSidebar from '../components/RoutineSidebar.jsx';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
@@ -28,25 +29,29 @@ export default function ManagerDashboard() {
   const [tasks, setTasks] = useState([]);
   const [activity, setActivity] = useState([]);
   const [team, setTeam] = useState([]);
+  const [routines, setRoutines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [assignError, setAssignError] = useState('');
   const [assignSuccess, setAssignSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [busyTaskId, setBusyTaskId] = useState(null);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [summaryRes, tasksRes, activityRes] = await Promise.all([
+      const [summaryRes, tasksRes, activityRes, teamRes, routinesRes] = await Promise.all([
         api.summary(token, date),
         api.listTasks(token, { date, userId: selectedUserId || undefined }),
         api.activity(token, date),
         api.listUsers(token),
+        api.listRoutines(token, { userId: selectedUserId || undefined }),
       ]);
       setSummary(summaryRes.summary);
       setTasks(tasksRes.tasks);
       setActivity(activityRes.activity);
       setTeam(teamRes.users);
+      setRoutines(routinesRes.routines);
     } catch (err) {
       console.error(err);
     } finally {
@@ -102,6 +107,53 @@ export default function ManagerDashboard() {
   const handleResetPassword = async (id, password) => {
     await api.resetPassword(token, id, password);
   };
+
+  const handleUpdatePhone = async (id, phone) => {
+    await api.updateUserPhone(token, id, phone);
+    await loadAll();
+  };
+
+  const handleUpdateTaskStatus = async (id, payload) => {
+    setBusyTaskId(id);
+    try {
+      await api.updateStatus(token, id, payload);
+      await loadAll();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setBusyTaskId(null);
+    }
+  };
+
+  const handleAddRemark = async (id, remark) => {
+    await api.addTaskRemark(token, id, remark);
+    await loadAll();
+  };
+
+  const handleCreateRoutine = async (payload) => {
+    await api.createRoutine(token, payload);
+    await loadAll();
+  };
+
+  const handleToggleRoutine = async (id) => {
+    await api.toggleRoutine(token, id);
+    await loadAll();
+  };
+
+  const handleDeleteRoutine = async (id) => {
+    await api.deleteRoutine(token, id);
+    await loadAll();
+  };
+
+  const assignableUsers = team
+    .filter((u) => u.active && u.role !== 'admin')
+    .map((u) => ({
+      id: u.id,
+      name: u.name,
+      role: u.role,
+      roleLabel: u.role_label,
+      role_label: u.role_label,
+    }));
 
   const columnTasks = (statusKey) => tasks.filter((t) => t.status === statusKey);
   const carriedOverCount = tasks.filter((t) => t.taskDate && t.taskDate.slice(0, 10) < date).length;
@@ -182,7 +234,10 @@ export default function ManagerDashboard() {
                           key={t.id}
                           task={t}
                           showAssignee
-                          interactive={false}
+                          interactive={t.assignedTo?.id === session.user.id}
+                          onUpdateStatus={handleUpdateTaskStatus}
+                          onAddRemark={handleAddRemark}
+                          busy={busyTaskId === t.id}
                           onDelete={handleDeleteTask}
                           deleting={deletingId === t.id}
                           viewingDate={date}
@@ -197,7 +252,7 @@ export default function ManagerDashboard() {
 
           {!loading && tab === 'assign' && (
             <AssignTaskForm
-              team={summary}
+              team={assignableUsers}
               onSubmit={handleAssign}
               submitting={submitting}
               error={assignError}
@@ -211,12 +266,25 @@ export default function ManagerDashboard() {
             <TeamPanel
               team={team}
               currentUserId={session.user.id}
+              currentUserRole={session.user.role}
               onCreate={handleCreateUser}
               onSetActive={handleSetActive}
+              onUpdatePhone={handleUpdatePhone}
               onResetPassword={handleResetPassword}
             />
           )}
         </main>
+
+        <RoutineSidebar
+          routines={routines}
+          currentUser={session.user}
+          canAssign
+          assignableUsers={assignableUsers}
+          selectedUserId={selectedUserId}
+          onCreateRoutine={handleCreateRoutine}
+          onToggleRoutine={handleToggleRoutine}
+          onDeleteRoutine={handleDeleteRoutine}
+        />
       </div>
     </div>
   );
