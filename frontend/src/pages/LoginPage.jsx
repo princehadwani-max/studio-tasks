@@ -3,7 +3,6 @@ import { useAuth } from '../context/AuthContext.jsx';
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const [companySlug, setCompanySlug] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -14,7 +13,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(username.trim(), password, companySlug.trim());
+      await login(username.trim(), password);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -35,15 +34,6 @@ export default function LoginPage() {
           {error && <div className="login-error">{error}</div>}
 
           <form onSubmit={handleSubmit}>
-            <div className="field">
-              <label>Company Code (optional)</label>
-              <input
-                value={companySlug}
-                onChange={(e) => setCompanySlug(e.target.value)}
-                placeholder="e.g. starco"
-                autoComplete="organization"
-              />
-            </div>
             <div className="field">
               <label>Username</label>
               <input

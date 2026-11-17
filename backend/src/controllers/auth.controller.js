@@ -40,7 +40,7 @@ async function login(req, res) {
     }
 
     if (candidates.length === 0) {
-      return res.status(401).json({ error: 'Incorrect username, company code, or password.' });
+      return res.status(401).json({ error: 'Incorrect username or password.' });
     }
 
     let matchedUser = null;
