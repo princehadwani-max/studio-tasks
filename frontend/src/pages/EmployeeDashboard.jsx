@@ -7,6 +7,12 @@ import RoutineSidebar from '../components/RoutineSidebar.jsx';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
+const COLUMNS = [
+  { key: 'pending', label: 'Pending', dot: 'var(--amber)' },
+  { key: 'in_progress', label: 'In progress', dot: 'var(--teal)' },
+  { key: 'completed', label: 'Completed', dot: 'var(--green)' },
+];
+
 export default function EmployeeDashboard() {
   const { session, activeTenant } = useAuth();
   const token = session.token;
@@ -22,6 +28,9 @@ export default function EmployeeDashboard() {
   const [routines, setRoutines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'pending' | 'in_progress' | 'completed'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,28 +74,53 @@ export default function EmployeeDashboard() {
     await load();
   };
 
-  const todo = tasks.filter((t) => t.status !== 'completed');
-  const done = tasks.filter((t) => t.status === 'completed');
+  const filteredTasks = tasks.filter((t) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      t.title?.toLowerCase().includes(q) ||
+      t.code?.toLowerCase().includes(q) ||
+      t.description?.toLowerCase().includes(q) ||
+      t.assignedBy?.name?.toLowerCase().includes(q)
+    );
+  });
+
+  const columnTasks = (statusKey) => filteredTasks.filter((t) => t.status === statusKey);
+  const visibleTasks =
+    statusFilter === 'all' ? filteredTasks : filteredTasks.filter((t) => t.status === statusFilter);
+
+  const pendingTotal = tasks.filter((t) => t.status === 'pending').length;
+  const inProgressTotal = tasks.filter((t) => t.status === 'in_progress').length;
+  const doneTotal = tasks.filter((t) => t.status === 'completed').length;
   const isToday = date === todayStr();
-  const carriedOverCount = todo.filter((t) => t.taskDate && t.taskDate.slice(0, 10) < date).length;
+  const carriedOverCount = tasks.filter(
+    (t) => t.status !== 'completed' && t.taskDate && t.taskDate.slice(0, 10) < date
+  ).length;
+
+  const counts = {
+    all: filteredTasks.length,
+    pending: columnTasks('pending').length,
+    in_progress: columnTasks('in_progress').length,
+    completed: columnTasks('completed').length,
+  };
 
   return (
     <div className="app-shell">
       <TopBar />
       <div className="main-layout">
-        <main className="content" style={{ maxWidth: 760, margin: '0 auto', width: '100%' }}>
+        <main className="content" style={{ maxWidth: 1120, margin: '0 auto', width: '100%' }}>
           <div className="content-header">
             <div>
               <h1>{isToday ? "Today's call sheet" : 'Call sheet'}</h1>
               <div className="subtitle">
-                {todo.length} to do
+                {pendingTotal} pending · {inProgressTotal} in progress · {doneTotal} completed
                 {carriedOverCount > 0 && (
                   <>
                     {' '}
-                    (<span style={{ color: 'var(--amber)' }}>{carriedOverCount} from before</span>)
+                    · <span style={{ color: 'var(--amber)' }}>{carriedOverCount} carried over</span>
                   </>
                 )}{' '}
-                · {done.length} done ·{' '}
+                ·{' '}
                 <input
                   type="date"
                   value={date}
@@ -104,70 +138,141 @@ export default function EmployeeDashboard() {
 
           {loading && <p style={{ color: 'var(--text-faint)' }}>Loading…</p>}
 
-          {!loading && todo.filter((t) => t.status === 'pending').length > 0 && (
+          {!loading && pendingTotal > 0 && (
             <div
               className="form-success"
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                marginBottom: 18,
+                marginBottom: 16,
               }}
             >
               <span>
-                🔔 You have <b>{todo.filter((t) => t.status === 'pending').length}</b> new pending task
-                {todo.filter((t) => t.status === 'pending').length === 1 ? '' : 's'} assigned to you.
+                🔔 You have <b>{pendingTotal}</b> pending task
+                {pendingTotal === 1 ? '' : 's'} assigned to you.
               </span>
             </div>
           )}
 
-          {!loading && tasks.length === 0 && (
-            <div className="empty-state">
-              <h3>Nothing assigned {isToday ? 'today' : 'for this day'}</h3>
-              <p>When your manager assigns you work, it'll show up here.</p>
-            </div>
-          )}
-
-         {!loading && todo.length > 0 && (
+          {!loading && (
             <>
-              <div className="board-col-head" style={{ marginTop: 4 }}>
-                <span className="dot" style={{ background: 'var(--amber)' }} />
-                <h3>To do</h3>
-                <span className="count">{todo.length}</span>
-              </div>
-              <div className="board-col-body" style={{ marginBottom: 28 }}>
-                {todo.map((t) => (
-                  <TaskCard
-                    key={t.id}
-                    task={t}
-                    interactive
-                    onUpdateStatus={handleUpdate}
-                    onAddRemark={tenantFeatures.remarks !== false ? handleAddRemark : undefined}
-                    busy={busyId === t.id}
-                    viewingDate={date}
-                  />
-                ))}
-              </div>
-            </>
-          )}
+              <div className="command-toolbar">
+                <div className="status-filter-pills">
+                  <button
+                    type="button"
+                    className={`filter-pill ${statusFilter === 'all' ? 'active' : ''}`}
+                    onClick={() => setStatusFilter('all')}
+                  >
+                    <span>All</span>
+                    <span className="pill-count">{counts.all}</span>
+                  </button>
+                  {COLUMNS.map((col) => (
+                    <button
+                      key={col.key}
+                      type="button"
+                      className={`filter-pill ${statusFilter === col.key ? 'active' : ''}`}
+                      onClick={() => setStatusFilter(col.key)}
+                    >
+                      <span className="dot" style={{ background: col.dot }} />
+                      <span>{col.label}</span>
+                      <span className="pill-count">{counts[col.key]}</span>
+                    </button>
+                  ))}
+                </div>
 
-          {!loading && done.length > 0 && (
-            <>
-              <div className="board-col-head">
-                <span className="dot" style={{ background: 'var(--green)' }} />
-                <h3>Completed {isToday ? 'today' : ''}</h3>
-                <span className="count">{done.length}</span>
-              </div>
-              <div className="board-col-body">
-                {done.map((t) => (
-                  <TaskCard
-                    key={t.id}
-                    task={t}
-                    interactive={false}
-                    onAddRemark={tenantFeatures.remarks !== false ? handleAddRemark : undefined}
+                <div className="toolbar-right">
+                  <input
+                    type="search"
+                    className="toolbar-search"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Filter my tasks…"
                   />
-                ))}
+                  <div className="view-mode-toggle">
+                    <button
+                      type="button"
+                      className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                      onClick={() => setViewMode('grid')}
+                      title="Multi-column card grid"
+                    >
+                      ⊞ Grid
+                    </button>
+                    <button
+                      type="button"
+                      className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
+                      onClick={() => setViewMode('list')}
+                      title="Compact command list"
+                    >
+                      ☰ List
+                    </button>
+                  </div>
+                </div>
               </div>
+
+              {visibleTasks.length === 0 ? (
+                <div className="empty-state">
+                  <h3>
+                    {tasks.length === 0
+                      ? `Nothing assigned ${isToday ? 'today' : 'for this day'}`
+                      : 'No tasks match this filter'}
+                  </h3>
+                  <p>
+                    {tasks.length === 0
+                      ? "When your manager assigns you work, it'll show up here."
+                      : 'Switch status tabs or clear your search filter to see other tasks.'}
+                  </p>
+                </div>
+              ) : statusFilter !== 'all' ? (
+                <div className={viewMode === 'grid' ? 'task-grid' : 'task-list-stack'}>
+                  {visibleTasks.map((t) => (
+                    <TaskCard
+                      key={t.id}
+                      task={t}
+                      interactive
+                      compact={viewMode === 'list'}
+                      onUpdateStatus={handleUpdate}
+                      onAddRemark={tenantFeatures.remarks !== false ? handleAddRemark : undefined}
+                      busy={busyId === t.id}
+                      viewingDate={date}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="status-sections">
+                  {[
+                    { key: 'in_progress', label: 'In Progress', dot: 'var(--teal)' },
+                    { key: 'pending', label: 'Pending', dot: 'var(--amber)' },
+                    { key: 'completed', label: 'Completed', dot: 'var(--green)' },
+                  ].map((sec) => {
+                    const items = columnTasks(sec.key);
+                    if (items.length === 0) return null;
+                    return (
+                      <section key={sec.key} className="status-section">
+                        <div className="status-section-head">
+                          <span className="dot" style={{ background: sec.dot }} />
+                          <h3>{sec.label}</h3>
+                          <span className="count">{items.length}</span>
+                        </div>
+                        <div className={viewMode === 'grid' ? 'task-grid' : 'task-list-stack'}>
+                          {items.map((t) => (
+                            <TaskCard
+                              key={t.id}
+                              task={t}
+                              interactive
+                              compact={viewMode === 'list'}
+                              onUpdateStatus={handleUpdate}
+                              onAddRemark={tenantFeatures.remarks !== false ? handleAddRemark : undefined}
+                              busy={busyId === t.id}
+                              viewingDate={date}
+                            />
+                          ))}
+                        </div>
+                      </section>
+                    );
+                  })}
+                </div>
+              )}
             </>
           )}
         </main>

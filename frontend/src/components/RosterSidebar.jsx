@@ -1,9 +1,28 @@
 import Avatar from './Avatar.jsx';
 
-export default function RosterSidebar({ summary, selectedUserId, onSelect }) {
+export default function RosterSidebar({
+  summary,
+  selectedUserId,
+  onSelect,
+  collapsed = false,
+  onToggleCollapse,
+}) {
   return (
-    <aside className="sidebar">
-      <h2>Team — today</h2>
+    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+      <div className="sidebar-head">
+        <h2>Team — today</h2>
+        {onToggleCollapse && (
+          <button
+            type="button"
+            className="sidebar-collapse-btn"
+            onClick={onToggleCollapse}
+            title="Hide team sidebar"
+            aria-label="Hide team sidebar"
+          >
+            «
+          </button>
+        )}
+      </div>
 
       <button
         className={`roster-item ${selectedUserId === null ? 'active' : ''}`}

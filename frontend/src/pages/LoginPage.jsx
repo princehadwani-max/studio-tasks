@@ -24,12 +24,14 @@ export default function LoginPage() {
   return (
     <div className="login-shell">
       <div className="login-card">
-        <div className="slate-strip" />
         <div className="login-body">
-          <div className="login-brand">
-            STUDIO<span>/</span>TASKS
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <div className="brand-logo-box">S</div>
+            <div className="login-brand" style={{ marginBottom: 0 }}>
+              Studio<span>Tasks</span>
+            </div>
           </div>
-          <div className="login-sub">Today's call sheet, sorted by name.</div>
+          <div className="login-sub">Sign in to your workspace to view and manage daily tasks.</div>
 
           {error && <div className="login-error">{error}</div>}
 

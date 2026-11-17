@@ -34,6 +34,10 @@ export default function ManagerDashboard() {
   const [date, setDate] = useState(todayStr());
   const [tab, setTab] = useState(isSuperAdmin && !activeTenant ? 'saas' : 'board');
   const [selectedUserId, setSelectedUserId] = useState(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'pending' | 'in_progress' | 'completed'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
 
   const [summary, setSummary] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -186,8 +190,30 @@ export default function ManagerDashboard() {
     }
   };
 
-  const columnTasks = (statusKey) => tasks.filter((t) => t.status === statusKey);
-  const carriedOverCount = tasks.filter((t) => t.taskDate && t.taskDate.slice(0, 10) < date).length;
+  const filteredTasks = tasks.filter((t) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      t.title?.toLowerCase().includes(q) ||
+      t.code?.toLowerCase().includes(q) ||
+      t.description?.toLowerCase().includes(q) ||
+      t.assignedTo?.name?.toLowerCase().includes(q)
+    );
+  });
+
+  const columnTasks = (statusKey) => filteredTasks.filter((t) => t.status === statusKey);
+  const visibleTasks =
+    statusFilter === 'all' ? filteredTasks : filteredTasks.filter((t) => t.status === statusFilter);
+  const carriedOverCount = tasks.filter(
+    (t) => t.taskDate && t.taskDate.slice(0, 10) < date && t.status !== 'completed'
+  ).length;
+
+  const counts = {
+    all: filteredTasks.length,
+    in_progress: columnTasks('in_progress').length,
+    pending: columnTasks('pending').length,
+    completed: columnTasks('completed').length,
+  };
 
   // When Super Admin is at the platform level (not inside any specific tenant workspace),
   // render the SaaS Command Center directly without any tenant sidebar.
@@ -221,17 +247,34 @@ export default function ManagerDashboard() {
       <TopBar />
       <div className="main-layout">
         {tab !== 'saas' && (
-          <RosterSidebar summary={summary} selectedUserId={selectedUserId} onSelect={setSelectedUserId} />
+          <RosterSidebar
+            summary={summary}
+            selectedUserId={selectedUserId}
+            onSelect={setSelectedUserId}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
+          />
         )}
 
         <main className="content">
           <div className="content-header">
-            <div>
-              <h1>
-                {selectedUserId
-                  ? summary.find((p) => p.id === selectedUserId)?.name || 'Board'
-                  : "Today's board"}
-              </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {tab !== 'saas' && sidebarCollapsed && (
+                <button
+                  type="button"
+                  className="sidebar-expand-btn"
+                  onClick={() => setSidebarCollapsed(false)}
+                  title="Show team sidebar"
+                >
+                  » Team
+                </button>
+              )}
+              <div>
+                <h1>
+                  {selectedUserId
+                    ? summary.find((p) => p.id === selectedUserId)?.name || 'Board'
+                    : "Today's board"}
+                </h1>
               <div className="subtitle">
                 {tasks.length} task{tasks.length === 1 ? '' : 's'}
                 {carriedOverCount > 0 && (
@@ -252,6 +295,7 @@ export default function ManagerDashboard() {
                     font: 'inherit',
                   }}
                 />
+                </div>
               </div>
             </div>
 
@@ -287,38 +331,128 @@ export default function ManagerDashboard() {
 
           {loading && <p style={{ color: 'var(--text-faint)' }}>Loading…</p>}
 
-           {!loading && tab === 'board' && (
-            <div className="board">
-              {COLUMNS.map((col) => {
-                const items = columnTasks(col.key);
-                return (
-                  <div key={col.key}>
-                    <div className="board-col-head">
+          {!loading && tab === 'board' && (
+            <>
+              {/* Command Filter & Search Bar */}
+              <div className="command-toolbar">
+                <div className="status-filter-pills">
+                  <button
+                    type="button"
+                    className={`filter-pill ${statusFilter === 'all' ? 'active' : ''}`}
+                    onClick={() => setStatusFilter('all')}
+                  >
+                    <span>All</span>
+                    <span className="pill-count">{counts.all}</span>
+                  </button>
+                  {COLUMNS.map((col) => (
+                    <button
+                      key={col.key}
+                      type="button"
+                      className={`filter-pill ${statusFilter === col.key ? 'active' : ''}`}
+                      onClick={() => setStatusFilter(col.key)}
+                    >
                       <span className="dot" style={{ background: col.dot }} />
-                      <h3>{col.label}</h3>
-                      <span className="count">{items.length}</span>
-                    </div>
-                    <div className="board-col-body">
-                      {items.length === 0 && <div className="empty-col">No tasks here</div>}
-                      {items.map((t) => (
-                        <TaskCard
-                          key={t.id}
-                          task={t}
-                          showAssignee
-                          interactive={t.assignedTo?.id === session.user.id}
-                          onUpdateStatus={handleUpdateTaskStatus}
-                          onAddRemark={tenantFeatures.remarks !== false ? handleAddRemark : undefined}
-                          busy={busyTaskId === t.id}
-                          onDelete={handleDeleteTask}
-                          deleting={deletingId === t.id}
-                          viewingDate={date}
-                        />
-                      ))}
-                    </div>
+                      <span>{col.label}</span>
+                      <span className="pill-count">{counts[col.key]}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="toolbar-right">
+                  <input
+                    type="search"
+                    className="toolbar-search"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Filter tasks or person…"
+                  />
+                  <div className="view-mode-toggle">
+                    <button
+                      type="button"
+                      className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                      onClick={() => setViewMode('grid')}
+                      title="Multi-column card grid"
+                    >
+                      ⊞ Grid
+                    </button>
+                    <button
+                      type="button"
+                      className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
+                      onClick={() => setViewMode('list')}
+                      title="Compact command list"
+                    >
+                      ☰ List
+                    </button>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              </div>
+
+              {visibleTasks.length === 0 ? (
+                <div className="empty-state">
+                  <h3>No tasks match this view</h3>
+                  <p>
+                    {searchQuery
+                      ? 'Try clearing your search filter.'
+                      : 'Assign a new task from the "Assign work" tab to get started.'}
+                  </p>
+                </div>
+              ) : statusFilter !== 'all' ? (
+                <div className={viewMode === 'grid' ? 'task-grid' : 'task-list-stack'}>
+                  {visibleTasks.map((t) => (
+                    <TaskCard
+                      key={t.id}
+                      task={t}
+                      showAssignee
+                      interactive
+                      compact={viewMode === 'list'}
+                      onUpdateStatus={handleUpdateTaskStatus}
+                      onAddRemark={tenantFeatures.remarks !== false ? handleAddRemark : undefined}
+                      busy={busyTaskId === t.id}
+                      onDelete={handleDeleteTask}
+                      deleting={deletingId === t.id}
+                      viewingDate={date}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="status-sections">
+                  {[
+                    { key: 'in_progress', label: 'In Progress', dot: 'var(--teal)' },
+                    { key: 'pending', label: 'Pending', dot: 'var(--amber)' },
+                    { key: 'completed', label: 'Completed', dot: 'var(--green)' },
+                  ].map((sec) => {
+                    const items = columnTasks(sec.key);
+                    if (items.length === 0) return null;
+                    return (
+                      <section key={sec.key} className="status-section">
+                        <div className="status-section-head">
+                          <span className="dot" style={{ background: sec.dot }} />
+                          <h3>{sec.label}</h3>
+                          <span className="count">{items.length}</span>
+                        </div>
+                        <div className={viewMode === 'grid' ? 'task-grid' : 'task-list-stack'}>
+                          {items.map((t) => (
+                            <TaskCard
+                              key={t.id}
+                              task={t}
+                              showAssignee
+                              interactive
+                              compact={viewMode === 'list'}
+                              onUpdateStatus={handleUpdateTaskStatus}
+                              onAddRemark={tenantFeatures.remarks !== false ? handleAddRemark : undefined}
+                              busy={busyTaskId === t.id}
+                              onDelete={handleDeleteTask}
+                              deleting={deletingId === t.id}
+                              viewingDate={date}
+                            />
+                          ))}
+                        </div>
+                      </section>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
 
           {!loading && tab === 'assign' && (
