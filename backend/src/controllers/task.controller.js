@@ -1,11 +1,16 @@
 const db = require('../db');
+const {
+  buildTaskWhatsAppMessage,
+  buildWhatsAppUrl,
+  sendWhatsAppNotification,
+} = require('../services/whatsapp');
 
-const DASHBOARD_ROLES = ['admin', 'MD', 'manager', 'sales manager', 'sales_manager'];
+const DASHBOARD_ROLES = ['super_admin', 'admin', 'MD', 'manager', 'sales manager', 'sales_manager'];
 
 const TASK_FIELDS = `
   t.id, t.code, t.title, t.description, t.task_date, t.status, t.priority,
   t.completion_note, t.created_at, t.updated_at, t.started_at, t.completed_at,
-  au.id AS assigned_to_id, au.name AS assigned_to_name, au.role_label AS assigned_to_role_label,
+  au.id AS assigned_to_id, au.name AS assigned_to_name, au.phone AS assigned_to_phone, au.role_label AS assigned_to_role_label,
   ab.id AS assigned_by_id, ab.name AS assigned_by_name,
   COALESCE(
     (
@@ -37,7 +42,7 @@ const TASK_JOIN = `
 `;
 
 function shapeTask(row) {
-  return {
+  const shaped = {
     id: row.id,
     code: row.code,
     title: row.title,
@@ -51,12 +56,19 @@ function shapeTask(row) {
     updatedAt: row.updated_at,
     startedAt: row.started_at,
     completedAt: row.completed_at,
-    assignedTo: { id: row.assigned_to_id, name: row.assigned_to_name, roleLabel: row.assigned_to_role_label },
+    assignedTo: {
+      id: row.assigned_to_id,
+      name: row.assigned_to_name,
+      phone: row.assigned_to_phone || '',
+      roleLabel: row.assigned_to_role_label,
+    },
     assignedBy: { id: row.assigned_by_id, name: row.assigned_by_name },
   };
+  shaped.whatsappUrl = buildWhatsAppUrl(shaped.assignedTo.phone, buildTaskWhatsAppMessage(shaped));
+  return shaped;
 }
 
-// Admin, MD, or Manager assigns a task to any active team member (including MD, other managers, sales managers, etc.).
+// Admin, MD, or Manager assigns a task to any active team member in their company.
 async function createTask(req, res) {
   const { title, description, assignedTo, taskDate, priority } = req.body;
 
@@ -65,35 +77,57 @@ async function createTask(req, res) {
   }
 
   try {
-    const assignee = await db.query(`SELECT id, role, active FROM users WHERE id = $1`, [assignedTo]);
+    const assignee = await db.query(
+      `SELECT id, role, active FROM users WHERE id = $1 AND company_id = $2`,
+      [assignedTo, req.tenantId]
+    );
     if (assignee.rowCount === 0) {
-      return res.status(404).json({ error: 'That team member does not exist.' });
+      return res.status(404).json({ error: 'That team member does not exist in this company.' });
     }
     if (!assignee.rows[0].active) {
       return res.status(400).json({ error: "You can't assign work to a removed team member." });
     }
 
-    const codeRes = await db.query(`SELECT nextval('task_code_seq') AS n`);
-    const code = `TSK-${String(codeRes.rows[0].n).padStart(4, '0')}`;
+    // Generate per-company sequential task code (e.g. TSK-0001 per tenant)
+    const seqRes = await db.query(
+      `UPDATE companies
+       SET task_seq = GREATEST(
+         task_seq + 1,
+         COALESCE((SELECT MAX(NULLIF(REGEXP_REPLACE(code, '[^0-9]', '', 'g'), '')::int) FROM tasks WHERE company_id = $1), 0) + 1
+       )
+       WHERE id = $1
+       RETURNING task_seq`,
+      [req.tenantId]
+    );
+    const code = `TSK-${String(seqRes.rows[0].task_seq).padStart(4, '0')}`;
 
     const { rows } = await db.query(
-      `INSERT INTO tasks (code, title, description, assigned_to, assigned_by, task_date, priority)
-       VALUES ($1, $2, $3, $4, $5, COALESCE($6, CURRENT_DATE), COALESCE($7, 'normal'))
+      `INSERT INTO tasks (company_id, code, title, description, assigned_to, assigned_by, task_date, priority)
+       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, CURRENT_DATE), COALESCE($8, 'normal'))
        RETURNING id`,
-      [code, title, description || null, assignedTo, req.user.id, taskDate || null, priority || null]
+      [req.tenantId, code, title, description || null, assignedTo, req.user.id, taskDate || null, priority || null]
     );
 
     const full = await db.query(`SELECT ${TASK_FIELDS} ${TASK_JOIN} WHERE t.id = $1`, [rows[0].id]);
-    return res.status(201).json({ task: shapeTask(full.rows[0]) });
+    const task = shapeTask(full.rows[0]);
+    const companyName = req.tenant?.name || 'Starco Ceramics';
+
+    let whatsapp = { sent: false, provider: 'disabled', whatsappUrl: task.whatsappUrl };
+    if (req.tenant?.features?.whatsapp !== false) {
+      whatsapp = await sendWhatsAppNotification(
+        req.tenantId,
+        task.assignedTo.phone,
+        buildTaskWhatsAppMessage(task, companyName)
+      );
+    }
+    return res.status(201).json({ task, whatsapp });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Could not create the task.' });
   }
 }
 
-// List tasks:
-// - Admin, MD, and Managers can view anyone's tasks on the board.
-// - Employees only see their own tasks.
+// List tasks scoped to the active company (req.tenantId).
 async function listTasks(req, res) {
   const date = req.query.date || new Date().toISOString().slice(0, 10);
   const requestedUserId = req.query.userId ? Number(req.query.userId) : null;
@@ -103,11 +137,12 @@ async function listTasks(req, res) {
   const targetUserId = isDashboardUser ? requestedUserId : req.user.id;
 
   const clauses = [
-    `(t.task_date = $1
-        OR (t.task_date < $1 AND t.status != 'completed')
-        OR (t.status = 'completed' AND t.completed_at::date = $1))`,
+    `t.company_id = $1`,
+    `(t.task_date = $2
+        OR (t.task_date < $2 AND t.status != 'completed')
+        OR (t.status = 'completed' AND t.completed_at::date = $2))`,
   ];
-  const params = [date];
+  const params = [req.tenantId, date];
 
   if (targetUserId) {
     params.push(targetUserId);
@@ -131,8 +166,7 @@ async function listTasks(req, res) {
   }
 }
 
-// A rolled-up view for the Roster Sidebar:
-// Admin, MD, and Managers see all active users (MD, Managers, Sales Managers, Export Coordinators, Designers, Operation Coordinators).
+// Roster sidebar summary scoped to the active company (req.tenantId).
 async function dailySummary(req, res) {
   const isDashboardUser = DASHBOARD_ROLES.includes(req.user.role);
   if (!isDashboardUser) {
@@ -149,8 +183,8 @@ async function dailySummary(req, res) {
                 WHERE t.status = 'completed' AND (t.completed_at::date = $1 OR t.task_date = $1)
               ) AS completed
        FROM users u
-       LEFT JOIN tasks t ON t.assigned_to = u.id
-       WHERE u.role != 'admin' AND u.active = true
+       LEFT JOIN tasks t ON t.assigned_to = u.id AND t.company_id = u.company_id
+       WHERE u.company_id = $2 AND u.role NOT IN ('super_admin', 'admin') AND u.active = true
        GROUP BY u.id
        ORDER BY CASE u.role
          WHEN 'MD' THEN 0
@@ -162,7 +196,7 @@ async function dailySummary(req, res) {
          WHEN 'designer' THEN 4
          ELSE 5
        END, u.name`,
-      [date]
+      [date, req.tenantId]
     );
 
     return res.json({
@@ -189,7 +223,7 @@ async function dailySummary(req, res) {
   }
 }
 
-// Chronological activity feed for a day for Admin, MD, and Managers.
+// Chronological activity feed for a day scoped to req.tenantId.
 async function activityFeed(req, res) {
   const isDashboardUser = DASHBOARD_ROLES.includes(req.user.role);
   if (!isDashboardUser) {
@@ -200,10 +234,11 @@ async function activityFeed(req, res) {
   try {
     const { rows } = await db.query(
       `SELECT ${TASK_FIELDS} ${TASK_JOIN}
-       WHERE (t.started_at IS NOT NULL AND t.started_at::date = $1)
-          OR (t.completed_at IS NOT NULL AND t.completed_at::date = $1)
+       WHERE t.company_id = $2
+         AND ((t.started_at IS NOT NULL AND t.started_at::date = $1)
+           OR (t.completed_at IS NOT NULL AND t.completed_at::date = $1))
        ORDER BY COALESCE(t.completed_at, t.started_at) DESC`,
-      [date]
+      [date, req.tenantId]
     );
     return res.json({ activity: rows.map(shapeTask) });
   } catch (err) {
@@ -212,8 +247,7 @@ async function activityFeed(req, res) {
   }
 }
 
-// Update a task's status. The assignee moves their own work along;
-// Admin, MD, and Managers may also update any task.
+// Update a task's status within the active company.
 async function updateStatus(req, res) {
   const { id } = req.params;
   const { status, completionNote } = req.body;
@@ -224,7 +258,10 @@ async function updateStatus(req, res) {
   }
 
   try {
-    const existing = await db.query(`SELECT * FROM tasks WHERE id = $1`, [id]);
+    const existing = await db.query(
+      `SELECT * FROM tasks WHERE id = $1 AND company_id = $2`,
+      [id, req.tenantId]
+    );
     if (existing.rowCount === 0) {
       return res.status(404).json({ error: 'Task not found.' });
     }
@@ -247,9 +284,9 @@ async function updateStatus(req, res) {
          started_at = CASE WHEN $3 THEN NOW() ELSE started_at END,
          completed_at = CASE WHEN $4 THEN NOW() ELSE completed_at END,
          updated_at = NOW()
-       WHERE id = $5
+       WHERE id = $5 AND company_id = $6
        RETURNING id`,
-      [status, completionNote || null, setStarted, setCompleted, id]
+      [status, completionNote || null, setStarted, setCompleted, id, req.tenantId]
     );
 
     const full = await db.query(`SELECT ${TASK_FIELDS} ${TASK_JOIN} WHERE t.id = $1`, [rows[0].id]);
@@ -260,8 +297,12 @@ async function updateStatus(req, res) {
   }
 }
 
-// Any member can add a remark to share info regarding a task.
+// Any member in the company can add a remark to share info regarding a task.
 async function addRemark(req, res) {
+  if (req.tenant?.features?.remarks === false && req.user.role !== 'super_admin') {
+    return res.status(403).json({ error: 'Task remarks are disabled for your company.' });
+  }
+
   const { id } = req.params;
   const remarkText = (req.body.remark || '').trim();
 
@@ -270,16 +311,19 @@ async function addRemark(req, res) {
   }
 
   try {
-    const existing = await db.query(`SELECT id FROM tasks WHERE id = $1`, [id]);
+    const existing = await db.query(
+      `SELECT id FROM tasks WHERE id = $1 AND company_id = $2`,
+      [id, req.tenantId]
+    );
     if (existing.rowCount === 0) {
       return res.status(404).json({ error: 'Task not found.' });
     }
 
     await db.query(
-      `INSERT INTO task_remarks (task_id, user_id, remark) VALUES ($1, $2, $3)`,
-      [id, req.user.id, remarkText]
+      `INSERT INTO task_remarks (company_id, task_id, user_id, remark) VALUES ($1, $2, $3, $4)`,
+      [req.tenantId, id, req.user.id, remarkText]
     );
-    await db.query(`UPDATE tasks SET updated_at = NOW() WHERE id = $1`, [id]);
+    await db.query(`UPDATE tasks SET updated_at = NOW() WHERE id = $1 AND company_id = $2`, [id, req.tenantId]);
 
     const full = await db.query(`SELECT ${TASK_FIELDS} ${TASK_JOIN} WHERE t.id = $1`, [id]);
     return res.status(201).json({ task: shapeTask(full.rows[0]) });
@@ -289,12 +333,15 @@ async function addRemark(req, res) {
   }
 }
 
-// Admin, MD, or Manager permanently deletes a task.
+// Admin, MD, or Manager permanently deletes a task within their company.
 async function deleteTask(req, res) {
   const { id } = req.params;
 
   try {
-    const { rows } = await db.query(`DELETE FROM tasks WHERE id = $1 RETURNING id, code`, [id]);
+    const { rows } = await db.query(
+      `DELETE FROM tasks WHERE id = $1 AND company_id = $2 RETURNING id, code`,
+      [id, req.tenantId]
+    );
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Task not found.' });
     }

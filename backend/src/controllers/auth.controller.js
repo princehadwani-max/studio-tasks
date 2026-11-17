@@ -3,41 +3,79 @@ const jwt = require('jsonwebtoken');
 const db = require('../db');
 
 async function login(req, res) {
-  console.log("Login attempt")
-  const { username, password } = req.body;
+  const { username, password, companySlug } = req.body;
 
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required.' });
   }
 
+  const normalizedUsername = username.toLowerCase().trim();
+  const normalizedSlug = (companySlug || '').toLowerCase().trim();
+
   try {
-    const { rows } = await db.query(
-      `SELECT id, name, username, phone, password_hash, role, role_label, active FROM users WHERE username = $1`,
-      [username.toLowerCase().trim()]
-    );
+    let candidates = [];
 
-    const user = rows[0];
-    console.log({user})
-    if (!user) {
+    if (normalizedSlug) {
+      const slugAliases = normalizedSlug === 'studio' ? ['starco', 'studio'] : [normalizedSlug];
+      const { rows } = await db.query(
+        `SELECT u.id, u.company_id, u.name, u.username, u.phone, u.password_hash, u.role, u.role_label, u.active,
+                c.name AS company_name, c.slug AS company_slug, c.active AS company_active, c.features AS company_features
+         FROM users u
+         LEFT JOIN companies c ON c.id = u.company_id
+         WHERE u.username = $1 AND (u.role = 'super_admin' OR c.slug = ANY($2))`,
+        [normalizedUsername, slugAliases]
+      );
+      candidates = rows;
+    } else {
+      const { rows } = await db.query(
+        `SELECT u.id, u.company_id, u.name, u.username, u.phone, u.password_hash, u.role, u.role_label, u.active,
+                c.name AS company_name, c.slug AS company_slug, c.active AS company_active, c.features AS company_features
+         FROM users u
+         LEFT JOIN companies c ON c.id = u.company_id
+         WHERE u.username = $1
+         ORDER BY CASE WHEN u.role = 'super_admin' THEN 0 WHEN u.company_id = 1 THEN 1 ELSE 2 END`,
+        [normalizedUsername]
+      );
+      candidates = rows;
+    }
+
+    if (candidates.length === 0) {
+      return res.status(401).json({ error: 'Incorrect username, company code, or password.' });
+    }
+
+    let matchedUser = null;
+    for (const candidate of candidates) {
+      const valid = await bcrypt.compare(password, candidate.password_hash);
+      if (valid) {
+        matchedUser = candidate;
+        break;
+      }
+    }
+
+    if (!matchedUser) {
       return res.status(401).json({ error: 'Incorrect username or password.' });
     }
 
-    const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) {
-      return res.status(401).json({ error: 'Incorrect username or password.' });
+    if (!matchedUser.active) {
+      return res.status(403).json({ error: 'This account has been deactivated. Contact your admin.' });
     }
 
-    if (!user.active) {
-      return res.status(403).json({ error: 'This account has been deactivated. Contact your manager.' });
+    const isSuperAdmin = matchedUser.role === 'super_admin';
+    if (!isSuperAdmin && matchedUser.company_active === false) {
+      return res.status(403).json({ error: 'This company workspace has been suspended.' });
     }
 
     const payload = {
-      id: user.id,
-      name: user.name,
-      username: user.username,
-      phone: user.phone || '',
-      role: user.role,
-      role_label: user.role_label,
+      id: matchedUser.id,
+      name: matchedUser.name,
+      username: matchedUser.username,
+      phone: matchedUser.phone || '',
+      role: matchedUser.role,
+      role_label: matchedUser.role_label,
+      companyId: isSuperAdmin ? null : matchedUser.company_id,
+      companyName: isSuperAdmin ? null : matchedUser.company_name,
+      companySlug: isSuperAdmin ? null : matchedUser.company_slug,
+      companyFeatures: isSuperAdmin ? {} : matchedUser.company_features || {},
     };
 
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '12h' });
@@ -49,7 +87,13 @@ async function login(req, res) {
 }
 
 async function me(req, res) {
-  return res.json({ user: req.user });
+  return res.json({
+    user: {
+      ...req.user,
+      companyFeatures: req.tenant?.features || req.user.companyFeatures || {},
+    },
+    tenant: req.tenant,
+  });
 }
 
 module.exports = { login, me };

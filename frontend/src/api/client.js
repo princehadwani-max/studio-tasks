@@ -1,8 +1,18 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
-async function request(path, { method = 'GET', body, token } = {}) {
+let currentTenantId = null;
+
+export function setApiTenantId(tenantId) {
+  currentTenantId = tenantId ? Number(tenantId) : null;
+}
+
+async function request(path, { method = 'GET', body, token, tenantId } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
+  const effectiveTenantId = tenantId || currentTenantId;
+  if (effectiveTenantId) {
+    headers['X-Company-Id'] = String(effectiveTenantId);
+  }
 
   const res = await fetch(`${API_URL}${path}`, {
     method,
@@ -19,7 +29,11 @@ async function request(path, { method = 'GET', body, token } = {}) {
 }
 
 export const api = {
-  login: (username, password) => request('/auth/login', { method: 'POST', body: { username, password } }),  
+  login: (username, password, companySlug) =>
+    request('/auth/login', {
+      method: 'POST',
+      body: { username, password, companySlug: companySlug || undefined },
+    }),
   me: (token) => request('/auth/me', { token }),
   listUsers: (token) => request('/users', { token }),
   listTasks: (token, { date, userId, status } = {}) => {
@@ -55,4 +69,12 @@ export const api = {
   createRoutine: (token, payload) => request('/routines', { method: 'POST', body: payload, token }),
   toggleRoutine: (token, id) => request(`/routines/${id}/toggle`, { method: 'PATCH', token }),
   deleteRoutine: (token, id) => request(`/routines/${id}`, { method: 'DELETE', token }),
+  whatsappStatus: (token) => request('/whatsapp/status', { token }),
+  whatsappConnect: (token) => request('/whatsapp/connect', { method: 'POST', token }),
+  whatsappDisconnect: (token) => request('/whatsapp/disconnect', { method: 'POST', token }),
+  listTenants: (token) => request('/tenants', { token }),
+  createTenant: (token, payload) => request('/tenants', { method: 'POST', body: payload, token }),
+  updateTenant: (token, id, payload) => request(`/tenants/${id}`, { method: 'PATCH', body: payload, token }),
+  createTenantAdmin: (token, id, payload) =>
+    request(`/tenants/${id}/admins`, { method: 'POST', body: payload, token }),
 };

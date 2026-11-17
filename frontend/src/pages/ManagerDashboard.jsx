@@ -8,6 +8,7 @@ import AssignTaskForm from '../components/AssignTaskForm.jsx';
 import ActivityLog from '../components/ActivityLog.jsx';
 import TeamPanel from '../components/TeamPanel.jsx';
 import RoutineSidebar from '../components/RoutineSidebar.jsx';
+import SuperAdminPanel from '../components/SuperAdminPanel.jsx';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
@@ -18,11 +19,20 @@ const COLUMNS = [
 ];
 
 export default function ManagerDashboard() {
-  const { session } = useAuth();
+  const { session, activeTenant, switchTenant } = useAuth();
   const token = session.token;
+  const isSuperAdmin = session.user.role === 'super_admin';
+  const inTenantWorkspace = !isSuperAdmin || Boolean(activeTenant);
+  const tenantId = activeTenant?.id || session.user.companyId || 1;
+  const tenantFeatures = activeTenant?.features || session.user.companyFeatures || {
+    whatsapp: true,
+    routines: true,
+    remarks: true,
+    team_management: true,
+  };
 
   const [date, setDate] = useState(todayStr());
-  const [tab, setTab] = useState('board');
+  const [tab, setTab] = useState(isSuperAdmin && !activeTenant ? 'saas' : 'board');
   const [selectedUserId, setSelectedUserId] = useState(null);
 
   const [summary, setSummary] = useState([]);
@@ -38,6 +48,10 @@ export default function ManagerDashboard() {
   const [busyTaskId, setBusyTaskId] = useState(null);
 
   const loadAll = useCallback(async () => {
+    if (!inTenantWorkspace) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [summaryRes, tasksRes, activityRes, teamRes, routinesRes] = await Promise.all([
@@ -57,7 +71,7 @@ export default function ManagerDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [token, date, selectedUserId]);
+  }, [token, date, selectedUserId, tenantId, inTenantWorkspace]);
 
   useEffect(() => {
     loadAll();
@@ -68,8 +82,16 @@ export default function ManagerDashboard() {
     setAssignSuccess('');
     setSubmitting(true);
     try {
-      const { task } = await api.createTask(token, payload);
-      setAssignSuccess(`${task.code} assigned to ${task.assignedTo.name}.`);
+      const { task, whatsapp } = await api.createTask(token, payload);
+      if (whatsapp?.sent) {
+        setAssignSuccess(
+          `${task.code} assigned to ${task.assignedTo.name} · Sent to WhatsApp immediately!`
+        );
+      } else {
+        setAssignSuccess(
+          `${task.code} assigned to ${task.assignedTo.name}. (Link WhatsApp in Team tab for automatic background messages)`
+        );
+      }
       await loadAll();
       return true;
     } catch (err) {
@@ -146,23 +168,61 @@ export default function ManagerDashboard() {
   };
 
   const assignableUsers = team
-    .filter((u) => u.active && u.role !== 'admin')
+    .filter((u) => u.active && !['super_admin', 'admin'].includes(u.role))
     .map((u) => ({
       id: u.id,
       name: u.name,
+      phone: u.phone || '',
       role: u.role,
       roleLabel: u.role_label,
       role_label: u.role_label,
     }));
 
+  const handleSelectTenantFromCommandCenter = (tenant, goToBoard = true) => {
+    setSelectedUserId(null);
+    switchTenant(tenant);
+    if (goToBoard) {
+      setTab('board');
+    }
+  };
+
   const columnTasks = (statusKey) => tasks.filter((t) => t.status === statusKey);
   const carriedOverCount = tasks.filter((t) => t.taskDate && t.taskDate.slice(0, 10) < date).length;
+
+  // When Super Admin is at the platform level (not inside any specific tenant workspace),
+  // render the SaaS Command Center directly without any tenant sidebar.
+  if (isSuperAdmin && !activeTenant) {
+    return (
+      <div className="app-shell">
+        <TopBar />
+        <div className="main-layout">
+          <main className="content" style={{ maxWidth: 1080, margin: '0 auto', width: '100%' }}>
+            <div className="content-header">
+              <div>
+                <h1>⚡ SaaS Command Center</h1>
+                <div className="subtitle">
+                  Global platform control · Select any tenant company below to enter its workspace.
+                </div>
+              </div>
+            </div>
+            <SuperAdminPanel
+              token={token}
+              activeTenant={activeTenant}
+              onSelectTenant={handleSelectTenantFromCommandCenter}
+            />
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell">
       <TopBar />
       <div className="main-layout">
-        <RosterSidebar summary={summary} selectedUserId={selectedUserId} onSelect={setSelectedUserId} />
+        {tab !== 'saas' && (
+          <RosterSidebar summary={summary} selectedUserId={selectedUserId} onSelect={setSelectedUserId} />
+        )}
 
         <main className="content">
           <div className="content-header">
@@ -208,9 +268,20 @@ export default function ManagerDashboard() {
               >
                 Activity log
               </button>
-              <button className={`tab-btn ${tab === 'team' ? 'active' : ''}`} onClick={() => setTab('team')}>
-                Team
-              </button>
+              {(tenantFeatures.team_management !== false || isSuperAdmin) && (
+                <button className={`tab-btn ${tab === 'team' ? 'active' : ''}`} onClick={() => setTab('team')}>
+                  Team
+                </button>
+              )}
+              {isSuperAdmin && (
+                <button
+                  className={`tab-btn ${tab === 'saas' ? 'active' : ''}`}
+                  onClick={() => setTab('saas')}
+                  style={{ color: tab === 'saas' ? 'var(--amber)' : undefined }}
+                >
+                  ⚡ SaaS Command Center
+                </button>
+              )}
             </div>
           </div>
 
@@ -236,7 +307,7 @@ export default function ManagerDashboard() {
                           showAssignee
                           interactive={t.assignedTo?.id === session.user.id}
                           onUpdateStatus={handleUpdateTaskStatus}
-                          onAddRemark={handleAddRemark}
+                          onAddRemark={tenantFeatures.remarks !== false ? handleAddRemark : undefined}
                           busy={busyTaskId === t.id}
                           onDelete={handleDeleteTask}
                           deleting={deletingId === t.id}
@@ -265,6 +336,9 @@ export default function ManagerDashboard() {
           {!loading && tab === 'team' && (
             <TeamPanel
               team={team}
+              token={token}
+              companyName={activeTenant?.name || session.user.companyName || 'Starco Ceramics'}
+              whatsappEnabled={tenantFeatures.whatsapp !== false}
               currentUserId={session.user.id}
               currentUserRole={session.user.role}
               onCreate={handleCreateUser}
@@ -273,18 +347,28 @@ export default function ManagerDashboard() {
               onResetPassword={handleResetPassword}
             />
           )}
+
+          {!loading && tab === 'saas' && isSuperAdmin && (
+            <SuperAdminPanel
+              token={token}
+              activeTenant={activeTenant}
+              onSelectTenant={handleSelectTenantFromCommandCenter}
+            />
+          )}
         </main>
 
-        <RoutineSidebar
-          routines={routines}
-          currentUser={session.user}
-          canAssign
-          assignableUsers={assignableUsers}
-          selectedUserId={selectedUserId}
-          onCreateRoutine={handleCreateRoutine}
-          onToggleRoutine={handleToggleRoutine}
-          onDeleteRoutine={handleDeleteRoutine}
-        />
+        {tenantFeatures.routines !== false && tab !== 'saas' && (
+          <RoutineSidebar
+            routines={routines}
+            currentUser={session.user}
+            canAssign
+            assignableUsers={assignableUsers}
+            selectedUserId={selectedUserId}
+            onCreateRoutine={handleCreateRoutine}
+            onToggleRoutine={handleToggleRoutine}
+            onDeleteRoutine={handleDeleteRoutine}
+          />
+        )}
       </div>
     </div>
   );

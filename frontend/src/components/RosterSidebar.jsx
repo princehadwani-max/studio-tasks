@@ -32,10 +32,7 @@ export default function RosterSidebar({ summary, selectedUserId, onSelect }) {
             <Avatar name={person.name} role={person.role} />
             <div className="info">
               <div className="r-name">{person.name}</div>
-              <div className="r-role">
-                {person.roleLabel}
-                {person.phone ? ` · ${person.phone}` : ''}
-              </div>
+              <div className="r-role">{person.roleLabel}</div>
               <div className="roster-progress">
                 {person.total === 0 ? (
                   <span className="seg" style={{ flex: 1 }} />

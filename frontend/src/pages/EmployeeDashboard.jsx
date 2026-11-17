@@ -8,8 +8,14 @@ import RoutineSidebar from '../components/RoutineSidebar.jsx';
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 export default function EmployeeDashboard() {
-  const { session } = useAuth();
+  const { session, activeTenant } = useAuth();
   const token = session.token;
+  const tenantFeatures = activeTenant?.features || session.user.companyFeatures || {
+    whatsapp: true,
+    routines: true,
+    remarks: true,
+    team_management: true,
+  };
 
   const [date, setDate] = useState(todayStr());
   const [tasks, setTasks] = useState([]);
@@ -98,6 +104,23 @@ export default function EmployeeDashboard() {
 
           {loading && <p style={{ color: 'var(--text-faint)' }}>Loading…</p>}
 
+          {!loading && todo.filter((t) => t.status === 'pending').length > 0 && (
+            <div
+              className="form-success"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 18,
+              }}
+            >
+              <span>
+                🔔 You have <b>{todo.filter((t) => t.status === 'pending').length}</b> new pending task
+                {todo.filter((t) => t.status === 'pending').length === 1 ? '' : 's'} assigned to you.
+              </span>
+            </div>
+          )}
+
           {!loading && tasks.length === 0 && (
             <div className="empty-state">
               <h3>Nothing assigned {isToday ? 'today' : 'for this day'}</h3>
@@ -119,7 +142,7 @@ export default function EmployeeDashboard() {
                     task={t}
                     interactive
                     onUpdateStatus={handleUpdate}
-                    onAddRemark={handleAddRemark}
+                    onAddRemark={tenantFeatures.remarks !== false ? handleAddRemark : undefined}
                     busy={busyId === t.id}
                     viewingDate={date}
                   />
@@ -141,7 +164,7 @@ export default function EmployeeDashboard() {
                     key={t.id}
                     task={t}
                     interactive={false}
-                    onAddRemark={handleAddRemark}
+                    onAddRemark={tenantFeatures.remarks !== false ? handleAddRemark : undefined}
                   />
                 ))}
               </div>
@@ -149,12 +172,14 @@ export default function EmployeeDashboard() {
           )}
         </main>
 
-        <RoutineSidebar
-          routines={routines}
-          currentUser={session.user}
-          canAssign={false}
-          onToggleRoutine={handleToggleRoutine}
-        />
+        {tenantFeatures.routines !== false && (
+          <RoutineSidebar
+            routines={routines}
+            currentUser={session.user}
+            canAssign={false}
+            onToggleRoutine={handleToggleRoutine}
+          />
+        )}
       </div>
     </div>
   );

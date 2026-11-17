@@ -9,13 +9,16 @@ const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const taskRoutes = require('./routes/task.routes');
 const routineRoutes = require('./routes/routine.routes');
+const whatsappRoutes = require('./routes/whatsapp.routes');
+const tenantRoutes = require('./routes/tenant.routes');
+const { initAllSavedWhatsAppClients } = require('./services/whatsapp');
 
 const app = express();
   
 const corsOptions = {
   origin: process.env.CORS_ORIGIN,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Company-Id'],
 };
 
 app.use(cors(corsOptions));
@@ -27,6 +30,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/routines', routineRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/tenants', tenantRoutes);
 
 // Fallback error handler
 app.use((err, req, res, next) => {
@@ -41,9 +46,16 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, async () => {
   console.log(`Studio Tasks API listening on port ${PORT}`);
+  initAllSavedWhatsAppClients().catch((err) => console.error('WhatsApp auto-init error:', err.message));
   try {
     const schema = fs.readFileSync(path.join(__dirname, '../db/schema.sql'), 'utf8');
     await db.query(schema);
+    // Ensure any existing users without a phone number receive a default fallback phone
+    await db.query(`
+      UPDATE users
+      SET phone = '98765432' || LPAD(id::text, 2, '0')
+      WHERE phone IS NULL OR TRIM(phone) = ''
+    `);
   } catch (err) {
     console.error('Schema sync warning:', err.message);
   }

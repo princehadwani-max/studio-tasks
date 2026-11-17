@@ -9,8 +9,13 @@ export default function App() {
   if (!ready) return null;
   if (!session) return <LoginPage />;
 
-  const isDashboardRole = ['admin', 'MD', 'manager', 'sales manager', 'sales_manager'].includes(
-    session.user.role
-  );
+  const isDashboardRole = [
+    'super_admin',
+    'admin',
+    'MD',
+    'manager',
+    'sales manager',
+    'sales_manager',
+  ].includes(session.user.role);
   return isDashboardRole ? <ManagerDashboard /> : <EmployeeDashboard />;
 }

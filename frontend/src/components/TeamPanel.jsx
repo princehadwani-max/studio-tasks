@@ -1,5 +1,93 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Avatar from './Avatar.jsx';
+import { api } from '../api/client.js';
+
+function WhatsAppConnectionCard({ token, companyName }) {
+  const [wa, setWa] = useState({ status: 'disconnected', qrDataUrl: null, connectedPhone: null });
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const res = await api.whatsappStatus(token);
+        if (active) setWa(res);
+      } catch {}
+    };
+    poll();
+    const timer = setInterval(poll, 3000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [token, companyName]);
+
+  const handleConnect = async () => {
+    setBusy(true);
+    try {
+      const res = await api.whatsappConnect(token);
+      setWa(res);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setBusy(true);
+    try {
+      const res = await api.whatsappDisconnect(token);
+      setWa(res);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const activeCompanyLabel = wa.companyName || companyName || 'this company';
+
+  return (
+    <div className="form-card" style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <h3 style={{ marginBottom: 4 }}>WhatsApp Auto-Notifications ({activeCompanyLabel})</h3>
+          <div style={{ fontSize: 12.5, color: 'var(--text-dim)' }}>
+            {wa.status === 'connected'
+              ? `Connected (+${wa.connectedPhone || 'Linked'}) for ${activeCompanyLabel} — tasks assigned in this workspace are sent from this number.`
+              : `Link ${activeCompanyLabel}'s WhatsApp number so tasks in this workspace are sent automatically.`}
+          </div>
+        </div>
+        {wa.status === 'connected' ? (
+          <button className="btn btn-ghost btn-sm btn-danger-text" onClick={handleDisconnect} disabled={busy}>
+            Disconnect
+          </button>
+        ) : (
+          <button className="btn btn-teal btn-sm" onClick={handleConnect} disabled={busy}>
+            {wa.status === 'connecting' ? 'Generating QR…' : 'Link WhatsApp'}
+          </button>
+        )}
+      </div>
+
+      {wa.status === 'qr_ready' && wa.qrDataUrl && (
+        <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <img
+            src={wa.qrDataUrl}
+            alt="WhatsApp QR Code"
+            style={{ width: 180, height: 180, borderRadius: 8, background: '#fff', padding: 6 }}
+          />
+          <div style={{ fontSize: 12.5, color: 'var(--text-dim)', lineHeight: 1.6, maxWidth: 260 }}>
+            <b style={{ color: 'var(--text)' }}>Scan once with WhatsApp:</b>
+            <br />
+            1. Open WhatsApp on your phone
+            <br />
+            2. Tap <b>Linked Devices → Link a Device</b>
+            <br />
+            3. Point your phone at this QR code
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const ROLE_OPTIONS = [
   { value: 'designer', label: 'Designer' },
@@ -269,6 +357,9 @@ function PhoneRow({ person, onUpdatePhone }) {
 
 export default function TeamPanel({
   team,
+  token,
+  companyName,
+  whatsappEnabled = true,
   currentUserId,
   currentUserRole,
   onCreate,
@@ -279,7 +370,7 @@ export default function TeamPanel({
   const [busyId, setBusyId] = useState(null);
   const [rowError, setRowError] = useState({});
 
-  const isAdmin = currentUserRole === 'admin' || currentUserRole === 'MD';
+  const isAdmin = ['super_admin', 'admin', 'MD'].includes(currentUserRole);
   const active = team.filter((p) => p.active);
   const removed = team.filter((p) => !p.active);
 
@@ -302,7 +393,9 @@ export default function TeamPanel({
   };
 
   const renderRow = (person) => {
-    const isProtectedAdmin = !isAdmin && (person.role === 'admin' || person.role === 'MD');
+    const isProtectedAdmin =
+      person.role === 'super_admin' ||
+      (!isAdmin && (person.role === 'admin' || person.role === 'MD'));
     return (
       <div key={person.id} className="team-row">
         <Avatar name={person.name} role={person.role} />
@@ -352,6 +445,7 @@ export default function TeamPanel({
 
   return (
     <div>
+      {whatsappEnabled && <WhatsAppConnectionCard token={token} companyName={companyName} />}
       <AddPersonForm onCreate={onCreate} isAdmin={isAdmin} />
 
       <h3 style={{ margin: '22px 0 12px' }}>On the team</h3>

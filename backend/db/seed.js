@@ -8,7 +8,7 @@ const { Pool } = require('pg');
 const DEFAULT_PASSWORD = 'studio123'; // ⚠ change after first login — see README
 
 const USERS = [
-  { name: 'Prince', username: 'prince', phone: '9876543201', role: 'admin', role_label: 'Admin' },
+  { name: 'Prince', username: 'prince', phone: '9510194671', role: 'super_admin', role_label: 'Super Admin' },
   { name: 'Deep', username: 'deep', phone: '9876543202', role: 'manager', role_label: 'Manager' },
   { name: 'JayBhai', username: 'jaybhai', phone: '9876543203', role: 'MD', role_label: 'MD' },
   { name: 'Rutvik', username: 'rutvik', phone: '9876543204', role: 'sales manager', role_label: 'Sales Manager 1' },
@@ -34,6 +34,15 @@ async function main() {
   const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
 
   try {
+    // Ensure tenant company #1 (Starco Ceramics) exists
+    const companyRes = await pool.query(
+      `INSERT INTO companies (id, name, slug, active)
+       VALUES (1, 'Starco Ceramics', 'starco', true)
+       ON CONFLICT (id) DO UPDATE SET name = 'Starco Ceramics', slug = 'starco'
+       RETURNING id`
+    );
+    const defaultCompanyId = companyRes.rows[0].id;
+
     // Normalize any legacy uppercase/spaced usernames before upserting
     await pool.query(`
       UPDATE users
@@ -41,7 +50,8 @@ async function main() {
       WHERE username != LOWER(REPLACE(TRIM(username), ' ', '.'))
         AND NOT EXISTS (
           SELECT 1 FROM users u2
-          WHERE u2.username = LOWER(REPLACE(TRIM(users.username), ' ', '.'))
+          WHERE COALESCE(u2.company_id, 0) = COALESCE(users.company_id, 0)
+            AND u2.username = LOWER(REPLACE(TRIM(users.username), ' ', '.'))
             AND u2.id != users.id
         )
     `);
@@ -49,29 +59,49 @@ async function main() {
     const idByUsername = {};
 
     for (const u of USERS) {
-      const res = await pool.query(
-        `INSERT INTO users (name, username, password_hash, phone, role, role_label, active)
-         VALUES ($1, $2, $3, $4, $5, $6, true)
-         ON CONFLICT (username) DO UPDATE
-           SET name = EXCLUDED.name,
-               phone = CASE WHEN users.phone IS NULL OR users.phone = '' THEN EXCLUDED.phone ELSE users.phone END,
-               role = EXCLUDED.role,
-               role_label = EXCLUDED.role_label,
-               active = true
-         RETURNING id, username`,
-        [u.name, u.username, passwordHash, u.phone, u.role, u.role_label]
+      const targetCompanyId = u.role === 'super_admin' ? null : defaultCompanyId;
+      const existingUser = await pool.query(
+        `SELECT id FROM users WHERE username = $1 AND COALESCE(company_id, 0) = COALESCE($2::int, 0)`,
+        [u.username, targetCompanyId]
       );
+
+      let res;
+      if (existingUser.rowCount > 0) {
+        res = await pool.query(
+          `UPDATE users
+           SET name = $1,
+               company_id = $2,
+               phone = CASE WHEN users.phone IS NULL OR users.phone = '' THEN $3 ELSE users.phone END,
+               role = $4,
+               role_label = $5,
+               active = true
+           WHERE id = $6
+           RETURNING id, username`,
+          [u.name, targetCompanyId, u.phone, u.role, u.role_label, existingUser.rows[0].id]
+        );
+      } else {
+        res = await pool.query(
+          `INSERT INTO users (company_id, name, username, password_hash, phone, role, role_label, active)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+           RETURNING id, username`,
+          [targetCompanyId, u.name, u.username, passwordHash, u.phone, u.role, u.role_label]
+        );
+      }
       idByUsername[res.rows[0].username] = res.rows[0].id;
     }
     console.log('✔ Users seeded:', Object.keys(idByUsername).join(', '));
 
-    const existing = await pool.query(`SELECT id FROM tasks WHERE code = 'TSK-0001'`);
+    const existing = await pool.query(
+      `SELECT id FROM tasks WHERE company_id = $1 AND code = 'TSK-0001'`,
+      [defaultCompanyId]
+    );
     if (existing.rowCount === 0) {
       const { rows } = await pool.query(
-        `INSERT INTO tasks (code, title, description, assigned_to, assigned_by, task_date, status, priority)
-         VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, 'pending', 'high')
+        `INSERT INTO tasks (company_id, code, title, description, assigned_to, assigned_by, task_date, status, priority)
+         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE, 'pending', 'high')
          RETURNING id, code`,
         [
+          defaultCompanyId,
           'TSK-0001',
           'Arrange raw footage of flute session from Sfumato',
           'Pull in and organize the raw data from the flute shoot with Sfumato. Majorly video shots — sort by scene/take, label files clearly, and flag anything unusable.',

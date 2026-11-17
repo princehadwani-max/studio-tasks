@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const db = require('../db');
 
 const ROLES = [
+  'super_admin',
   'admin',
   'MD',
   'manager',
@@ -13,9 +14,10 @@ const ROLES = [
   'export_coordinator',
 ];
 
-const ADMIN_ROLES = ['admin', 'MD'];
+const ADMIN_ROLES = ['super_admin', 'admin', 'MD'];
 
 const ROLE_DEFAULT_LABEL = {
+  super_admin: 'Super Admin',
   admin: 'Admin',
   MD: 'MD',
   manager: 'Manager',
@@ -31,23 +33,27 @@ function isUniqueViolation(err) {
   return err && err.code === '23505';
 }
 
-// List the team roster (used by admin/MD/manager to pick who to assign work to,
-// manage the team, and restore removed members).
+// List the team roster for the active company workspace (req.tenantId).
 async function listUsers(req, res) {
   try {
     const { rows } = await db.query(
-      `SELECT id, name, username, phone, role, role_label, active FROM users ORDER BY
+      `SELECT id, company_id, name, username, phone, role, role_label, active
+       FROM users
+       WHERE company_id = $1
+       ORDER BY
          CASE role
-           WHEN 'admin' THEN 0
-           WHEN 'MD' THEN 1
-           WHEN 'manager' THEN 2
-           WHEN 'sales manager' THEN 3
-           WHEN 'sales_manager' THEN 3
-           WHEN 'export_coordinator' THEN 4
-           WHEN 'export coordinator' THEN 4
-           WHEN 'designer' THEN 5
-           ELSE 6
-         END, name`
+           WHEN 'super_admin' THEN 0
+           WHEN 'admin' THEN 1
+           WHEN 'MD' THEN 2
+           WHEN 'manager' THEN 3
+           WHEN 'sales manager' THEN 4
+           WHEN 'sales_manager' THEN 4
+           WHEN 'export_coordinator' THEN 5
+           WHEN 'export coordinator' THEN 5
+           WHEN 'designer' THEN 6
+           ELSE 7
+         END, name`,
+      [req.tenantId]
     );
     return res.json({ users: rows });
   } catch (err) {
@@ -56,8 +62,12 @@ async function listUsers(req, res) {
   }
 }
 
-// Admin, MD, or Manager adds a new team member with their own username/password/phone.
+// Admin, MD, or Manager adds a new team member within their company.
 async function createUser(req, res) {
+  if (req.tenant?.features?.team_management === false && req.user.role !== 'super_admin') {
+    return res.status(403).json({ error: 'Team management is disabled for your company.' });
+  }
+
   let { name, username, phone, password, role, roleLabel } = req.body;
 
   name = (name || '').trim();
@@ -74,6 +84,9 @@ async function createUser(req, res) {
   }
   if (!ROLES.includes(role)) {
     return res.status(400).json({ error: 'Invalid role selected.' });
+  }
+  if (role === 'super_admin' && req.user.role !== 'super_admin') {
+    return res.status(403).json({ error: 'Only the platform Super Admin can grant Super Admin rights.' });
   }
   const isAdminOrMD = ADMIN_ROLES.includes(req.user.role);
   if (!isAdminOrMD && ADMIN_ROLES.includes(role)) {
@@ -92,24 +105,27 @@ async function createUser(req, res) {
   try {
     const passwordHash = await bcrypt.hash(password, 10);
     const { rows } = await db.query(
-      `INSERT INTO users (name, username, phone, password_hash, role, role_label)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, name, username, phone, role, role_label, active`,
-      [name, username, phone, passwordHash, role, roleLabel]
+      `INSERT INTO users (company_id, name, username, phone, password_hash, role, role_label)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, company_id, name, username, phone, role, role_label, active`,
+      [req.tenantId, name, username, phone, passwordHash, role, roleLabel]
     );
     return res.status(201).json({ user: rows[0] });
   } catch (err) {
     if (isUniqueViolation(err)) {
-      return res.status(409).json({ error: 'That username is already taken.' });
+      return res.status(409).json({ error: 'That username is already taken in this company.' });
     }
     console.error(err);
     return res.status(500).json({ error: 'Could not add the team member.' });
   }
 }
 
-// Remove or restore a team member (soft delete: active = false).
-// Admin, MD, and Manager can remove/restore team members.
+// Remove or restore a team member within the company.
 async function setActive(req, res) {
+  if (req.tenant?.features?.team_management === false && req.user.role !== 'super_admin') {
+    return res.status(403).json({ error: 'Team management is disabled for your company.' });
+  }
+
   const { id } = req.params;
   const { active } = req.body;
 
@@ -124,31 +140,38 @@ async function setActive(req, res) {
   }
 
   try {
-    const existing = await db.query(`SELECT id, role, active FROM users WHERE id = $1`, [targetId]);
+    const existing = await db.query(
+      `SELECT id, role, active FROM users WHERE id = $1 AND company_id = $2`,
+      [targetId, req.tenantId]
+    );
     if (existing.rowCount === 0) {
       return res.status(404).json({ error: 'Team member not found.' });
     }
     const target = existing.rows[0];
-    const isAdminOrMD = ADMIN_ROLES.includes(req.user.role);
 
+    if (target.role === 'super_admin') {
+      return res.status(403).json({ error: 'The platform Super Admin account cannot be deactivated.' });
+    }
+
+    const isAdminOrMD = ADMIN_ROLES.includes(req.user.role);
     if (ADMIN_ROLES.includes(target.role) && !isAdminOrMD) {
       return res.status(403).json({ error: 'Managers cannot remove or modify an Admin or MD account.' });
     }
 
     if (!active && ADMIN_ROLES.includes(target.role)) {
       const { rows } = await db.query(
-        `SELECT COUNT(*)::int AS n FROM users WHERE role = ANY($1) AND active = true`,
-        [ADMIN_ROLES]
+        `SELECT COUNT(*)::int AS n FROM users WHERE company_id = $1 AND role = ANY($2) AND active = true`,
+        [req.tenantId, ADMIN_ROLES]
       );
       if (rows[0].n <= 1) {
-        return res.status(400).json({ error: 'You cannot remove the last active Admin/MD.' });
+        return res.status(400).json({ error: 'You cannot remove the last active Admin/MD in this company.' });
       }
     }
 
     const { rows } = await db.query(
-      `UPDATE users SET active = $1 WHERE id = $2
-       RETURNING id, name, username, phone, role, role_label, active`,
-      [active, targetId]
+      `UPDATE users SET active = $1 WHERE id = $2 AND company_id = $3
+       RETURNING id, company_id, name, username, phone, role, role_label, active`,
+      [active, targetId, req.tenantId]
     );
     return res.json({ user: rows[0] });
   } catch (err) {
@@ -157,7 +180,7 @@ async function setActive(req, res) {
   }
 }
 
-// Update a team member's phone number.
+// Update a team member's phone number within the company.
 async function updatePhone(req, res) {
   const { id } = req.params;
   const phone = (req.body.phone || '').trim();
@@ -168,9 +191,9 @@ async function updatePhone(req, res) {
 
   try {
     const { rows } = await db.query(
-      `UPDATE users SET phone = $1 WHERE id = $2
-       RETURNING id, name, username, phone, role, role_label, active`,
-      [phone, Number(id)]
+      `UPDATE users SET phone = $1 WHERE id = $2 AND company_id = $3
+       RETURNING id, company_id, name, username, phone, role, role_label, active`,
+      [phone, Number(id), req.tenantId]
     );
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Team member not found.' });
@@ -182,7 +205,7 @@ async function updatePhone(req, res) {
   }
 }
 
-// Admin, MD, or Manager sets a new password for an account.
+// Admin, MD, or Manager sets a new password for an account in their company.
 async function resetPassword(req, res) {
   const { id } = req.params;
   const { password } = req.body;
@@ -194,21 +217,28 @@ async function resetPassword(req, res) {
   const targetId = Number(id);
 
   try {
-    const existing = await db.query(`SELECT id, name, username, role FROM users WHERE id = $1`, [targetId]);
+    const existing = await db.query(
+      `SELECT id, name, username, role FROM users WHERE id = $1 AND company_id = $2`,
+      [targetId, req.tenantId]
+    );
     if (existing.rowCount === 0) {
       return res.status(404).json({ error: 'Team member not found.' });
     }
     const target = existing.rows[0];
-    const isAdminOrMD = ADMIN_ROLES.includes(req.user.role);
 
+    if (target.role === 'super_admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Only the Super Admin can change the Super Admin password.' });
+    }
+
+    const isAdminOrMD = ADMIN_ROLES.includes(req.user.role);
     if (ADMIN_ROLES.includes(target.role) && !isAdminOrMD) {
       return res.status(403).json({ error: 'Only an Admin or MD can reset an Admin/MD password.' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
     const { rows } = await db.query(
-      `UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING id, name, username`,
-      [passwordHash, targetId]
+      `UPDATE users SET password_hash = $1 WHERE id = $2 AND company_id = $3 RETURNING id, name, username`,
+      [passwordHash, targetId, req.tenantId]
     );
     return res.json({ ok: true, id: rows[0].id, name: rows[0].name });
   } catch (err) {

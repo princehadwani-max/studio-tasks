@@ -1,6 +1,11 @@
 const db = require('../db');
+const {
+  buildRoutineWhatsAppMessage,
+  buildWhatsAppUrl,
+  sendWhatsAppNotification,
+} = require('../services/whatsapp');
 
-const DASHBOARD_ROLES = ['admin', 'MD', 'manager', 'sales manager', 'sales_manager'];
+const DASHBOARD_ROLES = ['super_admin', 'admin', 'MD', 'manager', 'sales manager', 'sales_manager'];
 
 const ROUTINE_FIELDS = `
   r.id, r.title, r.description, r.frequency, r.last_completed_at, r.created_at,
@@ -9,7 +14,7 @@ const ROUTINE_FIELDS = `
     WHEN r.frequency = 'monthly' THEN (r.last_completed_at IS NOT NULL AND date_trunc('month', r.last_completed_at) = date_trunc('month', NOW()))
     ELSE false
   END AS completed_for_period,
-  au.id AS assigned_to_id, au.name AS assigned_to_name, au.role AS assigned_to_role, au.role_label AS assigned_to_role_label,
+  au.id AS assigned_to_id, au.name AS assigned_to_name, au.phone AS assigned_to_phone, au.role AS assigned_to_role, au.role_label AS assigned_to_role_label,
   ab.id AS assigned_by_id, COALESCE(ab.name, 'Manager') AS assigned_by_name
 `;
 
@@ -20,7 +25,7 @@ const ROUTINE_JOIN = `
 `;
 
 function shapeRoutine(row) {
-  return {
+  const shaped = {
     id: row.id,
     title: row.title,
     description: row.description,
@@ -31,6 +36,7 @@ function shapeRoutine(row) {
     assignedTo: {
       id: row.assigned_to_id,
       name: row.assigned_to_name,
+      phone: row.assigned_to_phone || '',
       role: row.assigned_to_role,
       roleLabel: row.assigned_to_role_label,
     },
@@ -39,11 +45,14 @@ function shapeRoutine(row) {
       name: row.assigned_by_name,
     },
   };
+  shaped.whatsappUrl = buildWhatsAppUrl(
+    shaped.assignedTo.phone,
+    buildRoutineWhatsAppMessage(shaped)
+  );
+  return shaped;
 }
 
-// List routine tasks:
-// - Admin, MD, and Managers see all routine tasks.
-// - Employees see only their own routine tasks.
+// List routine tasks scoped to req.tenantId.
 async function listRoutines(req, res) {
   const requestedUserId = req.query.userId ? Number(req.query.userId) : null;
   const frequency = req.query.frequency || null;
@@ -51,8 +60,8 @@ async function listRoutines(req, res) {
   const isDashboardUser = DASHBOARD_ROLES.includes(req.user.role);
   const targetUserId = isDashboardUser ? requestedUserId : req.user.id;
 
-  const clauses = ['au.active = true'];
-  const params = [];
+  const clauses = ['r.company_id = $1', 'au.active = true'];
+  const params = [req.tenantId];
 
   if (targetUserId) {
     params.push(targetUserId);
@@ -78,8 +87,12 @@ async function listRoutines(req, res) {
   }
 }
 
-// Admin, MD, or Manager creates a Daily or Monthly routine task for an employee or manager.
+// Admin, MD, or Manager creates a Daily or Monthly routine task for an employee or manager in their company.
 async function createRoutine(req, res) {
+  if (req.tenant?.features?.routines === false && req.user.role !== 'super_admin') {
+    return res.status(403).json({ error: 'Routine tasks are disabled for your company.' });
+  }
+
   const { title, description, frequency, assignedTo } = req.body;
 
   if (!title || !assignedTo) {
@@ -88,30 +101,44 @@ async function createRoutine(req, res) {
   const freq = frequency === 'monthly' ? 'monthly' : 'daily';
 
   try {
-    const assignee = await db.query(`SELECT id, active FROM users WHERE id = $1`, [assignedTo]);
+    const assignee = await db.query(
+      `SELECT id, active FROM users WHERE id = $1 AND company_id = $2`,
+      [assignedTo, req.tenantId]
+    );
     if (assignee.rowCount === 0) {
-      return res.status(404).json({ error: 'Team member not found.' });
+      return res.status(404).json({ error: 'Team member not found in this company.' });
     }
     if (!assignee.rows[0].active) {
       return res.status(400).json({ error: "You can't assign routines to a removed team member." });
     }
 
     const { rows } = await db.query(
-      `INSERT INTO routine_tasks (title, description, frequency, assigned_to, assigned_by)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO routine_tasks (company_id, title, description, frequency, assigned_to, assigned_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
-      [title.trim(), description ? description.trim() : null, freq, assignedTo, req.user.id]
+      [req.tenantId, title.trim(), description ? description.trim() : null, freq, assignedTo, req.user.id]
     );
 
     const full = await db.query(`SELECT ${ROUTINE_FIELDS} ${ROUTINE_JOIN} WHERE r.id = $1`, [rows[0].id]);
-    return res.status(201).json({ routine: shapeRoutine(full.rows[0]) });
+    const routine = shapeRoutine(full.rows[0]);
+    const companyName = req.tenant?.name || 'Starco Ceramics';
+
+    let whatsapp = { sent: false, provider: 'disabled', whatsappUrl: routine.whatsappUrl };
+    if (req.tenant?.features?.whatsapp !== false) {
+      whatsapp = await sendWhatsAppNotification(
+        req.tenantId,
+        routine.assignedTo.phone,
+        buildRoutineWhatsAppMessage(routine, companyName)
+      );
+    }
+    return res.status(201).json({ routine, whatsapp });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Could not create the routine task.' });
   }
 }
 
-// Toggle routine completion for today (daily) or this month (monthly).
+// Toggle routine completion for today (daily) or this month (monthly) within the company.
 async function toggleRoutine(req, res) {
   const { id } = req.params;
 
@@ -125,8 +152,8 @@ async function toggleRoutine(req, res) {
               END AS completed_for_period
        FROM routine_tasks r
        JOIN users au ON au.id = r.assigned_to
-       WHERE r.id = $1`,
-      [id]
+       WHERE r.id = $1 AND r.company_id = $2`,
+      [id, req.tenantId]
     );
     if (existing.rowCount === 0) {
       return res.status(404).json({ error: 'Routine task not found.' });
@@ -144,8 +171,8 @@ async function toggleRoutine(req, res) {
     await db.query(
       `UPDATE routine_tasks
        SET last_completed_at = CASE WHEN $1 THEN NOW() ELSE NULL END
-       WHERE id = $2`,
-      [nextCompleted, id]
+       WHERE id = $2 AND company_id = $3`,
+      [nextCompleted, id, req.tenantId]
     );
 
     const full = await db.query(`SELECT ${ROUTINE_FIELDS} ${ROUTINE_JOIN} WHERE r.id = $1`, [id]);
@@ -156,12 +183,15 @@ async function toggleRoutine(req, res) {
   }
 }
 
-// Delete a routine task.
+// Delete a routine task within the company.
 async function deleteRoutine(req, res) {
   const { id } = req.params;
 
   try {
-    const { rows } = await db.query(`DELETE FROM routine_tasks WHERE id = $1 RETURNING id`, [id]);
+    const { rows } = await db.query(
+      `DELETE FROM routine_tasks WHERE id = $1 AND company_id = $2 RETURNING id`,
+      [id, req.tenantId]
+    );
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Routine task not found.' });
     }
