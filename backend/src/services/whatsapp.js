@@ -2,13 +2,40 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 
-const BASE_AUTH_DIR = path.join(os.homedir(), '.studio_tasks_whatsapp_auth');
+function resolveWritableAuthBaseDir() {
+  const candidates = [
+    path.join(os.homedir(), '.studio_tasks_whatsapp_auth'),
+    path.join(os.tmpdir(), '.studio_tasks_whatsapp_auth'),
+  ];
+  for (const dir of candidates) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.accessSync(dir, fs.constants.W_OK);
+      return dir;
+    } catch {}
+  }
+  return path.join(os.tmpdir(), '.studio_tasks_whatsapp_auth');
+}
 
-// Per-tenant WhatsApp session map: Map<number, { sock, status, qrDataUrl, connectedPhone, initializing }>
+const BASE_AUTH_DIR = resolveWritableAuthBaseDir();
+
+// Per-tenant WhatsApp session map:
+// Map<number, { sock, status, qrDataUrl, connectedPhone, lastError, initializing, reconnectTimer }>
 const tenantSessions = new Map();
 
 function getTenantAuthDir(tenantId) {
   return path.join(BASE_AUTH_DIR, `company_${Number(tenantId) || 1}`);
+}
+
+function hasValidSavedPairing(authDir) {
+  try {
+    const credsPath = path.join(authDir, 'creds.json');
+    if (!fs.existsSync(credsPath)) return false;
+    const raw = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+    return Boolean(raw && raw.me && raw.me.id);
+  } catch {
+    return false;
+  }
 }
 
 // Migrate any legacy root-level auth files into company_1 once so existing linked session isn't lost
@@ -40,10 +67,27 @@ function getOrCreateSessionState(tenantId) {
       status: 'disconnected', // 'disconnected' | 'connecting' | 'qr_ready' | 'connected'
       qrDataUrl: null,
       connectedPhone: null,
+      lastError: null,
       initializing: false,
+      reconnectTimer: null,
     });
   }
   return tenantSessions.get(id);
+}
+
+function cleanupExistingSocket(session) {
+  if (session.reconnectTimer) {
+    clearTimeout(session.reconnectTimer);
+    session.reconnectTimer = null;
+  }
+  if (session.sock) {
+    try {
+      session.sock.ev.removeAllListeners('connection.update');
+      session.sock.ev.removeAllListeners('creds.update');
+      session.sock.end(undefined);
+    } catch {}
+    session.sock = null;
+  }
 }
 
 function normalizePhone(rawPhone) {
@@ -112,20 +156,38 @@ function getWhatsAppStatus(tenantId = 1) {
     status: session.status,
     qrDataUrl: session.qrDataUrl,
     connectedPhone: session.connectedPhone,
+    error: session.lastError,
   };
 }
 
 async function initWhatsAppClient(tenantId = 1, forceNew = false) {
   const id = Number(tenantId) || 1;
   const session = getOrCreateSessionState(id);
+  const authDir = getTenantAuthDir(id);
 
-  if (session.initializing) return getWhatsAppStatus(id);
   if (session.status === 'connected' && session.sock && !forceNew) {
+    return getWhatsAppStatus(id);
+  }
+
+  // If already QR-ready and user clicked Link WhatsApp again, return existing QR or force fresh one
+  if (forceNew) {
+    cleanupExistingSocket(session);
+    session.initializing = false;
+    session.qrDataUrl = null;
+    session.lastError = null;
+    // Clear any incomplete/unpaired auth state so a fresh QR is guaranteed to generate
+    if (!hasValidSavedPairing(authDir)) {
+      try {
+        fs.rmSync(authDir, { recursive: true, force: true });
+      } catch {}
+    }
+  } else if (session.initializing) {
     return getWhatsAppStatus(id);
   }
 
   session.initializing = true;
   session.status = 'connecting';
+  session.lastError = null;
 
   try {
     const baileys = await import('@whiskeysockets/baileys');
@@ -134,7 +196,6 @@ async function initWhatsAppClient(tenantId = 1, forceNew = false) {
     const QRCode = require('qrcode');
     const pino = require('pino');
 
-    const authDir = getTenantAuthDir(id);
     if (!fs.existsSync(authDir)) {
       fs.mkdirSync(authDir, { recursive: true });
     }
@@ -142,8 +203,11 @@ async function initWhatsAppClient(tenantId = 1, forceNew = false) {
     const { state, saveCreds } = await useMultiFileAuthState(authDir);
     let version;
     try {
-      const latest = await fetchLatestBaileysVersion();
-      version = latest.version;
+      const latest = await Promise.race([
+        fetchLatestBaileysVersion(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('version_timeout')), 2500)),
+      ]);
+      version = latest?.version;
     } catch {
       version = undefined;
     }
@@ -153,56 +217,85 @@ async function initWhatsAppClient(tenantId = 1, forceNew = false) {
       auth: state,
       printQRInTerminal: false,
       logger: pino({ level: 'silent' }),
-      browser: [`Company-${id}`, 'Chrome', '1.0.0'],
+      browser: [`StudioTasks-${id}`, 'Chrome', '1.0.0'],
+      connectTimeoutMs: 20000,
     });
 
     session.sock = sock;
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', async (update) => {
-      const { connection, lastDisconnect, qr } = update;
-
-      if (qr) {
-        try {
-          session.qrDataUrl = await QRCode.toDataURL(qr, { margin: 2, width: 240 });
-          session.status = 'qr_ready';
-        } catch (err) {
-          console.error(`[Tenant ${id}] QR generation failed:`, err.message);
+    // Wait up to 8 seconds for the initial QR code or 'open' event before resolving HTTP connect call
+    await new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve();
         }
-      }
+      };
+      const timer = setTimeout(finish, 8000);
 
-      if (connection === 'open') {
-        session.status = 'connected';
-        session.qrDataUrl = null;
-        const userJid = sock?.user?.id || '';
-        session.connectedPhone = userJid.split(':')[0].split('@')[0] || 'Linked';
-        console.log(`✔ [Tenant ${id}] WhatsApp connected (${session.connectedPhone})`);
-      }
+      sock.ev.on('connection.update', async (update) => {
+        if (session.sock !== sock) return; // Ignore events from a superseded socket
+        const { connection, lastDisconnect, qr } = update;
 
-      if (connection === 'close') {
-        const statusCode = lastDisconnect?.error?.output?.statusCode;
-        const loggedOut = statusCode === DisconnectReason.loggedOut;
-        session.qrDataUrl = null;
-        session.connectedPhone = null;
-
-        if (loggedOut) {
-          session.status = 'disconnected';
-          session.sock = null;
+        if (qr) {
           try {
-            fs.rmSync(authDir, { recursive: true, force: true });
-          } catch {}
-        } else {
-          session.status = 'connecting';
-          setTimeout(() => {
-            session.initializing = false;
-            initWhatsAppClient(id, true);
-          }, 3000);
+            session.qrDataUrl = await QRCode.toDataURL(qr, { margin: 2, width: 240 });
+            session.status = 'qr_ready';
+            session.lastError = null;
+            finish();
+          } catch (err) {
+            console.error(`[Tenant ${id}] QR generation failed:`, err.message);
+            session.lastError = 'Failed to generate QR image.';
+            finish();
+          }
         }
-      }
+
+        if (connection === 'open') {
+          session.status = 'connected';
+          session.qrDataUrl = null;
+          session.lastError = null;
+          const userJid = sock?.user?.id || '';
+          session.connectedPhone = userJid.split(':')[0].split('@')[0] || 'Linked';
+          console.log(`✔ [Tenant ${id}] WhatsApp connected (${session.connectedPhone})`);
+          finish();
+        }
+
+        if (connection === 'close') {
+          const statusCode = lastDisconnect?.error?.output?.statusCode;
+          const loggedOut = statusCode === DisconnectReason.loggedOut;
+          const wasPaired = hasValidSavedPairing(authDir);
+
+          session.qrDataUrl = null;
+          session.connectedPhone = null;
+
+          if (loggedOut || !wasPaired) {
+            // Either explicitly logged out or an unpaired QR session closed/expired:
+            // wipe stale auth files so the next click on "Link WhatsApp" starts fresh
+            session.status = 'disconnected';
+            session.sock = null;
+            try {
+              fs.rmSync(authDir, { recursive: true, force: true });
+            } catch {}
+            finish();
+          } else {
+            // A previously paired session dropped connection: reconnect in background
+            session.status = 'connecting';
+            session.reconnectTimer = setTimeout(() => {
+              session.initializing = false;
+              initWhatsAppClient(id, false).catch(() => {});
+            }, 3000);
+            finish();
+          }
+        }
+      });
     });
   } catch (err) {
     console.error(`[Tenant ${id}] WhatsApp client init error:`, err.message);
     session.status = 'disconnected';
+    session.lastError = err.message || 'Could not initialize WhatsApp client.';
   } finally {
     session.initializing = false;
   }
@@ -218,12 +311,13 @@ async function disconnectWhatsAppClient(tenantId = 1) {
   try {
     if (session.sock) {
       await session.sock.logout().catch(() => {});
-      session.sock = null;
     }
   } finally {
+    cleanupExistingSocket(session);
     session.status = 'disconnected';
     session.qrDataUrl = null;
     session.connectedPhone = null;
+    session.lastError = null;
     session.initializing = false;
     try {
       fs.rmSync(authDir, { recursive: true, force: true });
@@ -232,7 +326,7 @@ async function disconnectWhatsAppClient(tenantId = 1) {
   return getWhatsAppStatus(id);
 }
 
-// Reconnect only tenants that already have saved WhatsApp credentials on disk
+// Reconnect only tenants that already have a completed WhatsApp pairing on disk
 async function initAllSavedWhatsAppClients() {
   migrateLegacyAuthIfNeeded();
   if (!fs.existsSync(BASE_AUTH_DIR)) return;
@@ -242,9 +336,9 @@ async function initAllSavedWhatsAppClients() {
     for (const entry of entries) {
       if (!entry.startsWith('company_')) continue;
       const tenantId = Number(entry.replace('company_', ''));
-      const credsFile = path.join(BASE_AUTH_DIR, entry, 'creds.json');
-      if (tenantId && fs.existsSync(credsFile)) {
-        initWhatsAppClient(tenantId).catch((err) =>
+      const authDir = path.join(BASE_AUTH_DIR, entry);
+      if (tenantId && hasValidSavedPairing(authDir)) {
+        initWhatsAppClient(tenantId, false).catch((err) =>
           console.error(`[Tenant ${tenantId}] Auto-reconnect error:`, err.message)
         );
       }

@@ -3,8 +3,9 @@ import Avatar from './Avatar.jsx';
 import { api } from '../api/client.js';
 
 function WhatsAppConnectionCard({ token, companyName }) {
-  const [wa, setWa] = useState({ status: 'disconnected', qrDataUrl: null, connectedPhone: null });
+  const [wa, setWa] = useState({ status: 'disconnected', qrDataUrl: null, connectedPhone: null, error: null });
   const [busy, setBusy] = useState(false);
+  const [uiError, setUiError] = useState('');
 
   useEffect(() => {
     if (!token) return;
@@ -16,7 +17,7 @@ function WhatsAppConnectionCard({ token, companyName }) {
       } catch {}
     };
     poll();
-    const timer = setInterval(poll, 3000);
+    const timer = setInterval(poll, 2500);
     return () => {
       active = false;
       clearInterval(timer);
@@ -25,9 +26,15 @@ function WhatsAppConnectionCard({ token, companyName }) {
 
   const handleConnect = async () => {
     setBusy(true);
+    setUiError('');
+    setWa((prev) => ({ ...prev, status: 'connecting', error: null }));
     try {
       const res = await api.whatsappConnect(token);
       setWa(res);
+      if (res.error) setUiError(res.error);
+    } catch (err) {
+      setUiError(err.message || 'Could not generate WhatsApp QR code.');
+      setWa((prev) => ({ ...prev, status: 'disconnected' }));
     } finally {
       setBusy(false);
     }
@@ -35,9 +42,12 @@ function WhatsAppConnectionCard({ token, companyName }) {
 
   const handleDisconnect = async () => {
     setBusy(true);
+    setUiError('');
     try {
       const res = await api.whatsappDisconnect(token);
       setWa(res);
+    } catch (err) {
+      setUiError(err.message || 'Could not disconnect WhatsApp.');
     } finally {
       setBusy(false);
     }
@@ -53,6 +63,8 @@ function WhatsAppConnectionCard({ token, companyName }) {
           <div style={{ fontSize: 12.5, color: 'var(--text-dim)' }}>
             {wa.status === 'connected'
               ? `Connected (+${wa.connectedPhone || 'Linked'}) for ${activeCompanyLabel} — tasks assigned in this workspace are sent from this number.`
+              : wa.status === 'qr_ready'
+              ? `QR code ready for ${activeCompanyLabel} — scan below with WhatsApp on your phone.`
               : `Link ${activeCompanyLabel}'s WhatsApp number so tasks in this workspace are sent automatically.`}
           </div>
         </div>
@@ -62,10 +74,20 @@ function WhatsAppConnectionCard({ token, companyName }) {
           </button>
         ) : (
           <button className="btn btn-teal btn-sm" onClick={handleConnect} disabled={busy}>
-            {wa.status === 'connecting' ? 'Generating QR…' : 'Link WhatsApp'}
+            {busy || wa.status === 'connecting'
+              ? 'Generating QR…'
+              : wa.status === 'qr_ready'
+              ? 'Refresh QR'
+              : 'Link WhatsApp'}
           </button>
         )}
       </div>
+
+      {(uiError || wa.error) && (
+        <div className="form-error" style={{ marginTop: 12, marginBottom: 0 }}>
+          {uiError || wa.error}
+        </div>
+      )}
 
       {wa.status === 'qr_ready' && wa.qrDataUrl && (
         <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
