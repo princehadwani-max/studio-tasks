@@ -5,11 +5,41 @@ import Avatar from './Avatar.jsx';
 export default function TopBar() {
   const { session, activeTenant, switchTenant, logout } = useAuth();
   const [theme, setTheme] = useState(() => localStorage.getItem('studio_tasks_theme') || 'dark');
+  const [installPrompt, setInstallPrompt] = useState(null);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('studio_tasks_theme', theme);
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) {
+      metaTheme.setAttribute('content', theme === 'light' ? '#ffffff' : '#09090b');
+    }
   }, [theme]);
+
+  useEffect(() => {
+    const onBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    const onAppInstalled = () => {
+      setInstallPrompt(null);
+    };
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+    window.addEventListener('appinstalled', onAppInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', onAppInstalled);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setInstallPrompt(null);
+    }
+  };
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
@@ -54,6 +84,16 @@ export default function TopBar() {
             title="Exit tenant workspace and return to SaaS Command Center"
           >
             ← Exit Workspace
+          </button>
+        )}
+        {installPrompt && (
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={handleInstallClick}
+            title="Install Studio Tasks as an app on your device"
+          >
+            ⬇ Install App
           </button>
         )}
         <button
