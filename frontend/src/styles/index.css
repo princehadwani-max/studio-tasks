@@ -1,32 +1,74 @@
 /* ============================================================
-   Studio Tasks — Modern Enterprise SaaS Design System
-   Clean, high-contrast neutral zinc/slate surfaces, crisp 1px
-   borders, Inter + JetBrains Mono typography, independent
-   scrollable panes on desktop, and full tablet/mobile support.
+   Studio Tasks — Maersk Industrial Design Typography & Surface System
+   Typography: Barlow Display × Inter Body × JetBrains Mono
+   Scale: System-wide +18% Font Size Scale
    ============================================================ */
 
 :root,
-[data-theme='dark'] {
+[data-theme='dark'],
+.dark {
   color-scheme: dark;
-  --bg: #09090b;
-  --surface: #111114;
-  --surface-2: #18181c;
-  --surface-3: #222228;
-  --border: #27272a;
-  --border-soft: #1e1e22;
+
+  /* Maersk Industrial Color Tokens */
+  --color-primary-50: #eef2ff;
+  --color-primary-100: #e0e7ff;
+  --color-primary-500: #6366f1;
+  --color-primary-600: #4f46e5;
+  --color-primary-700: #4338ca;
+
+  --color-brand-50: #f0f7fb;
+  --color-brand-100: #dcecf5;
+  --color-brand-400: #5fa3c7;
+  --color-brand-500: #4b94c0;
+  --color-brand-600: #4383a8;
+  --color-brand-700: #326786;
+
+  /* Typography Families */
+  --font-display: 'Barlow', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-body: 'Barlow', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  /* System-wide +18% Font Size Scale */
+  --text-xs: 0.885rem;
+  --text-xs--line-height: 1.45;
+  --text-sm: 1.0325rem;
+  --text-sm--line-height: 1.45;
+  --text-base: 1.18rem;
+  --text-base--line-height: 1.5;
+  --text-lg: 1.3275rem;
+  --text-lg--line-height: 1.5;
+  --text-xl: 1.475rem;
+  --text-xl--line-height: 1.4;
+  --text-2xl: 1.77rem;
+  --text-2xl--line-height: 1.35;
+  --text-3xl: 2.2125rem;
+  --text-3xl--line-height: 1.25;
+  --text-4xl: 2.655rem;
+  --text-4xl--line-height: 1.2;
+  --text-5xl: 3.54rem;
+  --text-5xl--line-height: 1.1;
+
+  /* Maersk Corporate Dark Surfaces */
+  --bg: #090a0f;
+  --surface: #11131a;
+  --surface-2: #181b24;
+  --surface-3: #222632;
+  --border: #272b38;
+  --border-soft: #1d202b;
 
   --text: #f8fafc;
   --text-dim: #94a3b8;
   --text-faint: #64748b;
 
-  --primary: #3b82f6;
-  --primary-hover: #2563eb;
-  --primary-dim: rgba(59, 130, 246, 0.14);
+  --primary: #4b94c0;
+  --primary-hover: #4383a8;
+  --primary-dim: rgba(75, 148, 192, 0.16);
 
   --amber: #f59e0b;
   --amber-dim: rgba(245, 158, 11, 0.14);
-  --teal: #0ea5e9;
-  --teal-dim: rgba(14, 165, 233, 0.14);
+  --teal: #5fa3c7;
+  --teal-dim: rgba(95, 163, 199, 0.16);
   --green: #10b981;
   --green-dim: rgba(16, 185, 129, 0.14);
   --red: #f43f5e;
@@ -34,10 +76,6 @@
 
   --radius: 10px;
   --radius-sm: 7px;
-
-  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
 
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
@@ -47,8 +85,8 @@
   color-scheme: light;
   --bg: #f8fafc;
   --surface: #ffffff;
-  --surface-2: #f1f5f9;
-  --surface-3: #e2e8f0;
+  --surface-2: #f0f7fb;
+  --surface-3: #dcecf5;
   --border: #cbd5e1;
   --border-soft: #e2e8f0;
 
@@ -56,14 +94,14 @@
   --text-dim: #475569;
   --text-faint: #64748b;
 
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --primary-dim: rgba(37, 99, 235, 0.1);
+  --primary: #4383a8;
+  --primary-hover: #326786;
+  --primary-dim: rgba(67, 131, 168, 0.12);
 
   --amber: #d97706;
   --amber-dim: rgba(217, 119, 6, 0.12);
-  --teal: #0284c7;
-  --teal-dim: rgba(2, 132, 199, 0.12);
+  --teal: #326786;
+  --teal-dim: rgba(50, 103, 134, 0.12);
   --green: #059669;
   --green-dim: rgba(5, 150, 105, 0.12);
   --red: #e11d48;
@@ -77,24 +115,43 @@
   box-sizing: border-box;
 }
 
+/* Base resets & styles — Clean Barlow & Inter Typography (+18% font scale) */
 html,
 body,
 #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
   height: 100%;
   max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: 14px;
+  font-family: 'Barlow', 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 1.0325rem;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
 }
+
+.dark html,
+.dark body,
+.dark #root,
+[data-theme='dark'] body,
+[data-theme='dark'] #root {
+  background-color: #090a0f;
+  color: #f8fafc;
+}
+
+/* Scale arbitrary pixel font classes across the UI by +18% */
+.text-\[10px\] { font-size: 11.8px !important; line-height: 1.4 !important; }
+.text-\[10\.5px\] { font-size: 12.4px !important; line-height: 1.4 !important; }
+.text-\[11px\] { font-size: 13px !important; line-height: 1.45 !important; }
+.text-\[12px\] { font-size: 14.16px !important; line-height: 1.45 !important; }
+.text-\[12\.5px\] { font-size: 14.75px !important; line-height: 1.45 !important; }
+.text-\[13px\] { font-size: 15.34px !important; line-height: 1.45 !important; }
+.text-\[14px\] { font-size: 16.52px !important; line-height: 1.45 !important; }
+.text-\[15px\] { font-size: 17.7px !important; line-height: 1.45 !important; }
 
 /* Custom thin scrollbars */
 ::-webkit-scrollbar {
@@ -118,7 +175,7 @@ h3,
 h4 {
   font-family: var(--font-display);
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
   margin: 0;
   color: var(--text);
 }
@@ -156,7 +213,7 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  height: 56px;
+  height: 60px;
   padding: 0 20px;
   border-bottom: 1px solid var(--border-soft);
   background: var(--surface);
@@ -172,25 +229,26 @@ a {
 }
 
 .brand-logo-box {
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   border-radius: 7px;
   background: var(--primary);
   color: #ffffff;
+  font-family: var(--font-display);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 16.52px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.35);
+  box-shadow: 0 2px 6px rgba(75, 148, 192, 0.35);
 }
 
 .brand-mark {
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: 18.88px;
   font-weight: 700;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
   color: var(--text);
   white-space: nowrap;
 }
@@ -202,7 +260,7 @@ a {
 
 .brand-date {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 13.6px;
   color: var(--text-faint);
   white-space: nowrap;
 }
@@ -219,8 +277,8 @@ a {
   border: 1px solid var(--border);
   color: var(--text-dim);
   border-radius: var(--radius-sm);
-  padding: 5px 10px;
-  font-size: 12px;
+  padding: 6px 12px;
+  font-size: 14.16px;
   font-weight: 500;
   transition: all 0.15s ease;
 }
@@ -233,8 +291,8 @@ a {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
-  padding: 3px 8px 3px 4px;
+  font-size: 15.34px;
+  padding: 4px 10px 4px 5px;
   background: var(--surface-2);
   border: 1px solid var(--border-soft);
   border-radius: 999px;
@@ -242,12 +300,12 @@ a {
 
 .user-chip .name {
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: 14.75px;
   line-height: 1.2;
 }
 .user-chip .role {
   color: var(--text-faint);
-  font-size: 10.5px;
+  font-size: 12.4px;
   line-height: 1.2;
 }
 
@@ -256,8 +314,8 @@ a {
   border: 1px solid var(--border);
   color: var(--text-dim);
   border-radius: var(--radius-sm);
-  padding: 6px 11px;
-  font-size: 12px;
+  padding: 6px 12px;
+  font-size: 14.16px;
   font-weight: 500;
   transition: all 0.15s ease;
 }
@@ -277,15 +335,15 @@ a {
 /* ---------- Avatar ---------- */
 
 .avatar {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 12px;
+  font-weight: 700;
+  font-size: 14.16px;
   flex-shrink: 0;
   border: 1px solid var(--border);
   background: var(--surface-3);
@@ -299,12 +357,12 @@ a {
 .avatar.role-operation_coordinator {
   background: var(--teal-dim);
   color: var(--teal);
-  border-color: rgba(14, 165, 233, 0.3);
+  border-color: rgba(95, 163, 199, 0.3);
 }
 .avatar.role-manager {
   background: var(--primary-dim);
   color: var(--primary);
-  border-color: rgba(59, 130, 246, 0.3);
+  border-color: rgba(75, 148, 192, 0.3);
 }
 .avatar.role-admin,
 .avatar.role-super_admin {
@@ -321,7 +379,7 @@ a {
 /* ---------- Left Roster Sidebar ---------- */
 
 .sidebar {
-  width: 256px;
+  width: 272px;
   flex-shrink: 0;
   height: 100%;
   border-right: 1px solid var(--border-soft);
@@ -350,12 +408,12 @@ a {
 }
 
 .sidebar h2 {
-  font-size: 11px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--text-faint);
   margin: 0;
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
 }
 
@@ -363,13 +421,13 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: 16.52px;
   line-height: 1;
   padding: 0;
   transition: all 0.14s ease;
@@ -388,8 +446,8 @@ a {
   border: 1px solid var(--border);
   color: var(--text-dim);
   border-radius: var(--radius-sm);
-  padding: 6px 11px;
-  font-size: 12.5px;
+  padding: 6px 12px;
+  font-size: 14.75px;
   font-weight: 600;
   white-space: nowrap;
   transition: all 0.14s ease;
@@ -408,8 +466,8 @@ a {
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
-  margin-bottom: 2px;
+  padding: 9px 10px;
+  margin-bottom: 3px;
   text-align: left;
   color: var(--text);
   transition: background 0.12s ease, border-color 0.12s ease;
@@ -428,14 +486,14 @@ a {
   min-width: 0;
 }
 .roster-item .info .r-name {
-  font-size: 13px;
+  font-size: 15.34px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .roster-item .info .r-role {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-faint);
   white-space: nowrap;
   overflow: hidden;
@@ -465,7 +523,7 @@ a {
 
 .roster-count {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-faint);
   flex-shrink: 0;
 }
@@ -497,14 +555,14 @@ a {
 }
 
 .content-header h1 {
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 700;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
 }
 .content-header .subtitle {
   color: var(--text-dim);
-  font-size: 12.5px;
-  margin-top: 2px;
+  font-size: 14.75px;
+  margin-top: 3px;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -516,8 +574,8 @@ a {
   border: 1px solid var(--border) !important;
   color: var(--text) !important;
   border-radius: 6px;
-  padding: 2px 8px;
-  font-size: 12px;
+  padding: 3px 9px;
+  font-size: 14.16px;
   font-weight: 500;
   cursor: pointer;
 }
@@ -537,11 +595,11 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
 .tabs {
   display: flex;
-  gap: 3px;
+  gap: 4px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 3px;
+  padding: 4px;
   overflow-x: auto;
   max-width: 100%;
 }
@@ -549,9 +607,9 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   background: transparent;
   border: none;
   color: var(--text-dim);
-  padding: 6px 13px;
+  padding: 7px 14px;
   border-radius: 5px;
-  font-size: 12.5px;
+  font-size: 14.75px;
   font-weight: 500;
   white-space: nowrap;
   transition: all 0.12s ease;
@@ -591,9 +649,9 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text-dim);
-  padding: 6px 12px;
+  padding: 6px 13px;
   border-radius: 99px;
-  font-size: 12.5px;
+  font-size: 14.75px;
   font-weight: 500;
   transition: all 0.14s ease;
 }
@@ -614,9 +672,9 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 }
 .filter-pill .pill-count {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   background: var(--surface-2);
-  padding: 1px 6px;
+  padding: 1px 7px;
   border-radius: 99px;
   color: inherit;
 }
@@ -633,9 +691,9 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: var(--radius-sm);
-  padding: 6px 11px;
-  font-size: 12.5px;
-  width: 210px;
+  padding: 7px 12px;
+  font-size: 14.75px;
+  width: 230px;
   font-family: var(--font-body);
   transition: border-color 0.14s ease, width 0.14s ease;
 }
@@ -656,9 +714,9 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   border: none;
   background: transparent;
   color: var(--text-dim);
-  font-size: 11.5px;
+  font-size: 13.6px;
   font-weight: 500;
-  padding: 4px 9px;
+  padding: 5px 10px;
   border-radius: 5px;
 }
 .view-btn.active {
@@ -686,8 +744,8 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   border-radius: 50%;
 }
 .status-section-head h3 {
-  font-family: var(--font-body);
-  font-size: 12px;
+  font-family: var(--font-display);
+  font-size: 14.16px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 700;
@@ -695,7 +753,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 }
 .status-section-head .count {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-dim);
   background: var(--surface-2);
   border: 1px solid var(--border-soft);
@@ -703,11 +761,11 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   border-radius: 99px;
 }
 
-/* Full-width balanced multi-column card grid (eliminates empty columns) */
+/* Full-width balanced multi-column card grid */
 .task-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 14px;
   align-items: stretch;
 }
 
@@ -741,8 +799,8 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   border-radius: 50%;
 }
 .board-col-head h3 {
-  font-family: var(--font-body);
-  font-size: 12px;
+  font-family: var(--font-display);
+  font-size: 14.16px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 600;
@@ -750,7 +808,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 }
 .board-col-head .count {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-dim);
   background: var(--surface-2);
   border: 1px solid var(--border-soft);
@@ -772,7 +830,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   padding: 24px 12px;
   text-align: center;
   color: var(--text-faint);
-  font-size: 12.5px;
+  font-size: 14.75px;
   background: var(--surface);
 }
 
@@ -783,7 +841,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 13px 14px 12px 16px;
+  padding: 15px 16px 14px 18px;
   box-shadow: var(--card-shadow);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   overflow: hidden;
@@ -795,55 +853,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 }
 
 .task-card.compact-row {
-  padding: 10px 14px 10px 16px;
-}
-
-.task-desc-wrap {
-  margin-bottom: 8px;
-}
-
-.task-desc {
-  font-size: 12.5px;
-  color: var(--text-dim);
-  line-height: 1.45;
-  word-break: break-word;
-}
-
-.task-desc.clamped {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.text-link-btn {
-  background: transparent;
-  border: none;
-  padding: 0;
-  margin-top: 3px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--primary);
-  cursor: pointer;
-}
-.text-link-btn:hover {
-  text-decoration: underline;
-}
-
-.task-footer-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: auto;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-soft);
-}
-
-.btn-xs {
-  padding: 4px 9px;
-  font-size: 11.5px;
-  border-radius: 5px;
+  padding: 12px 16px 12px 18px;
 }
 
 .task-card::before {
@@ -874,7 +884,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
 .task-code {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-dim);
   background: var(--surface-2);
@@ -884,7 +894,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 }
 
 .priority-flag {
-  font-size: 10px;
+  font-size: 11.8px;
   font-family: var(--font-mono);
   font-weight: 600;
   text-transform: uppercase;
@@ -909,14 +919,14 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: none;
   border-radius: 5px;
   background: transparent;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 13px;
   transition: all 0.12s ease;
 }
 .task-delete-btn:hover {
@@ -933,55 +943,81 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   align-items: center;
   gap: 5px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 12.4px;
   font-weight: 500;
   color: var(--amber);
   background: var(--amber-dim);
   border: 1px solid rgba(245, 158, 11, 0.25);
   border-radius: 5px;
   padding: 2px 7px;
-  margin-bottom: 8px;
 }
 
 .task-title {
-  font-size: 14px;
+  font-family: var(--font-display);
+  font-size: 16.52px;
   font-weight: 600;
   color: var(--text);
-  margin-bottom: 5px;
+  margin-bottom: 6px;
   line-height: 1.4;
   word-break: break-word;
 }
 
+.task-desc-wrap {
+  margin-bottom: 8px;
+}
+
 .task-desc {
-  font-size: 12.5px;
+  font-size: 14.75px;
   color: var(--text-dim);
-  line-height: 1.5;
-  margin-bottom: 10px;
+  line-height: 1.48;
   word-break: break-word;
 }
 
-.task-meta-row {
+.task-desc.clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.text-link-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin-top: 3px;
+  font-size: 13.6px;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+}
+.text-link-btn:hover {
+  text-decoration: underline;
+}
+
+.task-footer-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
 }
 
 .assignee-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 14.16px;
   font-weight: 500;
   color: var(--text-dim);
 }
 .assignee-chip .dot-avatar {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   font-family: var(--font-display);
-  font-size: 10px;
+  font-size: 11.8px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -993,7 +1029,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   align-items: center;
   gap: 5px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11.8px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1043,14 +1079,14 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   padding: 8px 10px;
   background: var(--surface-2);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: 14.16px;
   color: var(--text-dim);
   border-left: 2px solid var(--green);
 }
 .completion-note .label {
   display: block;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11.8px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--green);
@@ -1061,7 +1097,6 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 10px;
 }
 
 .task-remarks {
@@ -1075,7 +1110,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
 .task-remarks-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11.8px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1087,8 +1122,8 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   border: 1px solid var(--border-soft);
   border-left: 2px solid var(--primary);
   border-radius: var(--radius-sm);
-  padding: 7px 10px;
-  font-size: 12px;
+  padding: 8px 10px;
+  font-size: 14.16px;
 }
 
 .task-remark-head {
@@ -1096,14 +1131,14 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-dim);
   margin-bottom: 3px;
 }
 
 .task-remark-head span {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11.8px;
   color: var(--text-faint);
 }
 
@@ -1125,7 +1160,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   color: var(--text);
   padding: 8px 10px;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 14.75px;
   resize: vertical;
 }
 .task-remark-form textarea:focus {
@@ -1141,7 +1176,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   color: var(--text);
   padding: 8px 14px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
+  font-size: 15.34px;
   font-weight: 500;
   transition: all 0.15s ease;
   display: inline-flex;
@@ -1170,12 +1205,12 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
 .btn-teal {
   background: var(--teal-dim);
-  border-color: rgba(14, 165, 233, 0.35);
+  border-color: rgba(95, 163, 199, 0.35);
   color: var(--teal);
   font-weight: 600;
 }
 .btn-teal:hover {
-  background: rgba(14, 165, 233, 0.22);
+  background: rgba(95, 163, 199, 0.24);
 }
 
 .btn-green {
@@ -1189,8 +1224,13 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 }
 
 .btn-sm {
+  padding: 6px 11px;
+  font-size: 14.16px;
+}
+.btn-xs {
   padding: 5px 10px;
-  font-size: 12px;
+  font-size: 13.6px;
+  border-radius: 5px;
 }
 .btn-block {
   width: 100%;
@@ -1218,7 +1258,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 }
 .field label {
   display: block;
-  font-size: 12px;
+  font-size: 14.16px;
   font-weight: 600;
   color: var(--text-dim);
   margin-bottom: 6px;
@@ -1233,7 +1273,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   color: var(--text);
   border-radius: var(--radius-sm);
   padding: 9px 12px;
-  font-size: 13.5px;
+  font-size: 15.93px;
   font-family: var(--font-body);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -1263,7 +1303,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 22px;
-  max-width: 560px;
+  max-width: 600px;
   box-shadow: var(--card-shadow);
 }
 
@@ -1273,7 +1313,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   color: var(--red);
   padding: 9px 12px;
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size: 14.75px;
   margin-bottom: 14px;
 }
 .form-success {
@@ -1282,7 +1322,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   color: var(--green);
   padding: 9px 12px;
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size: 14.75px;
   margin-bottom: 14px;
 }
 
@@ -1295,7 +1335,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 4px 16px;
-  max-width: 760px;
+  max-width: 820px;
 }
 .activity-item {
   display: flex;
@@ -1308,9 +1348,9 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 }
 .activity-time {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 13.6px;
   color: var(--text-faint);
-  width: 76px;
+  width: 86px;
   flex-shrink: 0;
   padding-top: 2px;
 }
@@ -1319,14 +1359,14 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   min-width: 0;
 }
 .activity-headline {
-  font-size: 13.5px;
+  font-size: 15.93px;
   margin-bottom: 3px;
 }
 .activity-headline b {
   font-weight: 600;
 }
 .activity-sub {
-  font-size: 12px;
+  font-size: 14.16px;
   color: var(--text-faint);
 }
 
@@ -1343,7 +1383,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
 .login-card {
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -1357,9 +1397,9 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
 .login-brand {
   font-family: var(--font-display);
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 700;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
   margin-bottom: 4px;
 }
 .login-brand span {
@@ -1369,7 +1409,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
 .login-sub {
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: 15.34px;
   margin-bottom: 24px;
 }
 
@@ -1379,7 +1419,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   color: var(--red);
   padding: 9px 12px;
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size: 14.75px;
   margin-bottom: 16px;
 }
 
@@ -1387,7 +1427,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   margin-top: 20px;
   padding-top: 16px;
   border-top: 1px solid var(--border-soft);
-  font-size: 12px;
+  font-size: 14.16px;
   color: var(--text-faint);
   line-height: 1.5;
 }
@@ -1405,10 +1445,10 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 .empty-state h3 {
   color: var(--text);
   margin-bottom: 6px;
-  font-size: 15px;
+  font-size: 17.7px;
 }
 .empty-state p {
-  font-size: 13px;
+  font-size: 15.34px;
 }
 
 /* ---------- Team Panel ---------- */
@@ -1417,7 +1457,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-width: 780px;
+  max-width: 820px;
 }
 
 .team-row {
@@ -1441,23 +1481,23 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   align-items: center;
   gap: 8px;
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 15.93px;
 }
 .team-row .info .r-role {
-  font-size: 12px;
+  font-size: 14.16px;
   color: var(--text-dim);
   margin-top: 2px;
 }
 
 .you-tag {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11.8px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--primary);
   background: var(--primary-dim);
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  border: 1px solid rgba(75, 148, 192, 0.3);
   border-radius: 4px;
   padding: 1px 6px;
 }
@@ -1472,14 +1512,14 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
 .team-row-error {
   color: var(--red);
-  font-size: 11.5px;
+  font-size: 13.6px;
   margin-top: 3px;
 }
 
 /* ---------- Right Routine Sidebar ---------- */
 
 .routine-sidebar {
-  width: 300px;
+  width: 316px;
   flex-shrink: 0;
   height: 100%;
   border-left: 1px solid var(--border-soft);
@@ -1497,15 +1537,15 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 }
 
 .routine-sidebar-head h2 {
-  font-size: 12px;
+  font-size: 14.16px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .routine-sub {
-  font-size: 11.5px;
+  font-size: 13.6px;
   color: var(--text-faint);
   margin-top: 2px;
 }
@@ -1521,7 +1561,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 .routine-form .field input,
 .routine-form .field select {
   padding: 7px 10px;
-  font-size: 12.5px;
+  font-size: 14.75px;
   background: var(--surface);
 }
 
@@ -1540,7 +1580,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   background: transparent;
   border: none;
   color: var(--text-dim);
-  font-size: 11.5px;
+  font-size: 13.6px;
   font-weight: 500;
   padding: 5px 8px;
   border-radius: 5px;
@@ -1570,7 +1610,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   border-radius: var(--radius-sm);
   padding: 7px 10px;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: 14.16px;
   font-weight: 600;
   transition: all 0.12s ease;
 }
@@ -1583,7 +1623,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
 .routine-count {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   color: inherit;
   opacity: 0.85;
 }
@@ -1614,13 +1654,13 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 }
 
 .routine-check {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 5px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--green);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -1641,7 +1681,8 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 }
 
 .routine-title {
-  font-size: 13px;
+  font-family: var(--font-display);
+  font-size: 15.34px;
   font-weight: 600;
   line-height: 1.35;
   color: var(--text);
@@ -1653,7 +1694,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 }
 
 .routine-desc {
-  font-size: 11.5px;
+  font-size: 13.6px;
   color: var(--text-dim);
   margin-top: 3px;
   line-height: 1.4;
@@ -1669,7 +1710,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
 .routine-badge {
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 11.2px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1694,10 +1735,10 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   align-items: center;
   gap: 5px;
   background: var(--primary-dim);
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  border: 1px solid rgba(75, 148, 192, 0.35);
   border-radius: 6px;
-  padding: 3px 9px;
-  font-size: 12px;
+  padding: 3px 10px;
+  font-size: 14.16px;
   font-weight: 600;
   color: var(--primary);
   white-space: nowrap;
@@ -1705,13 +1746,13 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
 .tenant-pill small {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-dim);
   font-weight: 400;
 }
 
 .saas-command-center {
-  max-width: 1020px;
+  max-width: 1060px;
 }
 
 .saas-kpi-grid {
@@ -1731,7 +1772,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
 .saas-kpi-label {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 12.4px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1741,7 +1782,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
 .saas-kpi-val {
   font-family: var(--font-display);
-  font-size: 26px;
+  font-size: 30.7px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text);
@@ -1790,7 +1831,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
 .tenant-sec-label {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 12.4px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1800,7 +1841,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
 .perm-chip {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   padding: 4px 10px;
   border-radius: 6px;
@@ -1823,7 +1864,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 }
 
 .admin-chip {
-  font-size: 12px;
+  font-size: 14.16px;
   background: var(--surface-2);
   border: 1px solid var(--border-soft);
   border-radius: 6px;
@@ -1852,7 +1893,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   }
 
   .sidebar {
-    width: 220px;
+    width: 240px;
     height: auto;
     max-height: none;
   }
@@ -1912,11 +1953,11 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   }
 
   .tenant-pill {
-    max-width: 145px;
+    max-width: 155px;
     overflow: hidden;
     text-overflow: ellipsis;
-    padding: 2px 7px;
-    font-size: 11px;
+    padding: 2px 8px;
+    font-size: 13px;
   }
 
   .tenant-pill small {
@@ -1934,8 +1975,8 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
   .theme-toggle-btn,
   .logout-btn {
-    padding: 5px 8px;
-    font-size: 11.5px;
+    padding: 5px 9px;
+    font-size: 13.6px;
   }
 
   .user-chip-text {
@@ -1971,8 +2012,8 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
   .roster-item {
     width: auto;
-    min-width: 140px;
-    max-width: 180px;
+    min-width: 148px;
+    max-width: 190px;
     flex-shrink: 0;
     margin-bottom: 0;
     padding: 7px 10px;
@@ -1995,7 +2036,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   }
 
   .content-header h1 {
-    font-size: 19px;
+    font-size: 22.4px;
   }
 
   .tabs {
@@ -2008,8 +2049,8 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   .tab-btn {
     flex: 1 0 auto;
     text-align: center;
-    padding: 6px 10px;
-    font-size: 12px;
+    padding: 7px 10px;
+    font-size: 14.16px;
   }
 
   .command-toolbar {
@@ -2028,8 +2069,8 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
 
   .filter-pill {
     flex-shrink: 0;
-    padding: 5px 10px;
-    font-size: 12px;
+    padding: 6px 11px;
+    font-size: 14.16px;
   }
 
   .toolbar-right {
@@ -2108,7 +2149,7 @@ input[type='date']::-webkit-calendar-picker-indicator:hover {
   }
 
   .saas-kpi-val {
-    font-size: 22px;
+    font-size: 26px;
   }
 
   .tenant-card {
