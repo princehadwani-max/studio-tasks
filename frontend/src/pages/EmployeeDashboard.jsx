@@ -31,6 +31,7 @@ export default function EmployeeDashboard() {
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'pending' | 'in_progress' | 'completed'
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
+  const [routineModalOpen, setRoutineModalOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -110,29 +111,41 @@ export default function EmployeeDashboard() {
       <div className="main-layout">
         <main className="content" style={{ maxWidth: 1120, margin: '0 auto', width: '100%' }}>
           <div className="content-header">
-            <div>
-              <h1>{isToday ? "Today's call sheet" : 'Call sheet'}</h1>
-              <div className="subtitle">
-                {pendingTotal} pending · {inProgressTotal} in progress · {doneTotal} completed
-                {carriedOverCount > 0 && (
-                  <>
-                    {' '}
-                    · <span style={{ color: 'var(--amber)' }}>{carriedOverCount} carried over</span>
-                  </>
-                )}{' '}
-                ·{' '}
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--text-dim)',
-                    font: 'inherit',
-                  }}
-                />
+            <div className="content-header-top">
+              <div>
+                <h1>{isToday ? "Today's call sheet" : 'Call sheet'}</h1>
+                <div className="subtitle">
+                  {pendingTotal} pending · {inProgressTotal} in progress · {doneTotal} completed
+                  {carriedOverCount > 0 && (
+                    <>
+                      {' '}
+                      · <span style={{ color: 'var(--amber)' }}>{carriedOverCount} carried over</span>
+                    </>
+                  )}{' '}
+                  ·{' '}
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-dim)',
+                      font: 'inherit',
+                    }}
+                  />
+                </div>
               </div>
+
+              {tenantFeatures.routines !== false && (
+                <button
+                  type="button"
+                  className="routine-popup-trigger-btn"
+                  onClick={() => setRoutineModalOpen(true)}
+                >
+                  Routine Tasks
+                </button>
+              )}
             </div>
           </div>
 
@@ -283,6 +296,8 @@ export default function EmployeeDashboard() {
             currentUser={session.user}
             canAssign={false}
             onToggleRoutine={handleToggleRoutine}
+            mobileOpen={routineModalOpen}
+            onCloseMobile={() => setRoutineModalOpen(false)}
           />
         )}
       </div>

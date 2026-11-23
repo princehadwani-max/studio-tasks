@@ -10,6 +10,8 @@ export default function RoutineSidebar({
   onCreateRoutine,
   onToggleRoutine,
   onDeleteRoutine,
+  mobileOpen = false,
+  onCloseMobile,
 }) {
   const [freqTab, setFreqTab] = useState('daily');
   const [scope, setScope] = useState('all'); // 'all' | 'mine'
@@ -30,6 +32,15 @@ export default function RoutineSidebar({
       setAssignedTo(String(assignableUsers[0].id));
     }
   }, [assignableUsers, selectedUserId, assignedTo]);
+
+  useEffect(() => {
+    if (!mobileOpen || !onCloseMobile) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onCloseMobile();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [mobileOpen, onCloseMobile]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -90,22 +101,43 @@ export default function RoutineSidebar({
   const monthlyDone = monthlyList.filter((r) => r.completed).length;
 
   return (
-    <aside className="routine-sidebar">
-      <div className="routine-sidebar-head">
-        <div>
-          <h2>Routine Tasks</h2>
-          <div className="routine-sub">Daily &amp; monthly recurring work</div>
+    <>
+      {mobileOpen && (
+        <div
+          className="routine-modal-backdrop"
+          onClick={() => onCloseMobile && onCloseMobile()}
+          aria-hidden="true"
+        />
+      )}
+      <aside className={`routine-sidebar ${mobileOpen ? 'mobile-open' : ''}`}>
+        <div className="routine-sidebar-head">
+          <div>
+            <h2>Routine Tasks</h2>
+            <div className="routine-sub">Daily &amp; monthly recurring work</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            {canAssign && (
+              <button
+                type="button"
+                className={`btn btn-sm ${showForm ? 'btn-ghost' : 'btn-primary'}`}
+                onClick={() => setShowForm((v) => !v)}
+              >
+                {showForm ? 'Close' : '+ Assign'}
+              </button>
+            )}
+            {onCloseMobile && (
+              <button
+                type="button"
+                className="routine-modal-close-btn"
+                onClick={onCloseMobile}
+                aria-label="Close routine tasks"
+                title="Close"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
-        {canAssign && (
-          <button
-            type="button"
-            className={`btn btn-sm ${showForm ? 'btn-ghost' : 'btn-primary'}`}
-            onClick={() => setShowForm((v) => !v)}
-          >
-            {showForm ? 'Close' : '+ Assign'}
-          </button>
-        )}
-      </div>
 
       {canAssign && showForm && (
         <form className="routine-form" onSubmit={handleSubmit}>
@@ -273,5 +305,6 @@ export default function RoutineSidebar({
         )}
       </div>
     </aside>
+    </>
   );
 }

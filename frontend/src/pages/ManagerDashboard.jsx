@@ -50,6 +50,7 @@ export default function ManagerDashboard() {
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [busyTaskId, setBusyTaskId] = useState(null);
+  const [routineModalOpen, setRoutineModalOpen] = useState(false);
 
   const loadAll = useCallback(async () => {
     if (!inTenantWorkspace) {
@@ -258,45 +259,57 @@ export default function ManagerDashboard() {
 
         <main className="content">
           <div className="content-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              {tab !== 'saas' && sidebarCollapsed && (
-                <button
-                  type="button"
-                  className="sidebar-expand-btn"
-                  onClick={() => setSidebarCollapsed(false)}
-                  title="Show team sidebar"
-                >
-                  » Team
-                </button>
-              )}
-              <div>
-                <h1>
-                  {selectedUserId
-                    ? summary.find((p) => p.id === selectedUserId)?.name || 'Board'
-                    : "Today's board"}
-                </h1>
-              <div className="subtitle">
-                {tasks.length} task{tasks.length === 1 ? '' : 's'}
-                {carriedOverCount > 0 && (
-                  <>
-                    {' '}
-                    · <span style={{ color: 'var(--amber)' }}>{carriedOverCount} carried over</span>
-                  </>
-                )}{' '}
-                ·{' '}
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--text-dim)',
-                    font: 'inherit',
-                  }}
-                />
+            <div className="content-header-top">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                {tab !== 'saas' && sidebarCollapsed && (
+                  <button
+                    type="button"
+                    className="sidebar-expand-btn"
+                    onClick={() => setSidebarCollapsed(false)}
+                    title="Show team sidebar"
+                  >
+                    » Team
+                  </button>
+                )}
+                <div>
+                  <h1>
+                    {selectedUserId
+                      ? summary.find((p) => p.id === selectedUserId)?.name || 'Board'
+                      : "Today's board"}
+                  </h1>
+                  <div className="subtitle">
+                    {tasks.length} task{tasks.length === 1 ? '' : 's'}
+                    {carriedOverCount > 0 && (
+                      <>
+                        {' '}
+                        · <span style={{ color: 'var(--amber)' }}>{carriedOverCount} carried over</span>
+                      </>
+                    )}{' '}
+                    ·{' '}
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-dim)',
+                        font: 'inherit',
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
+
+              {tenantFeatures.routines !== false && tab !== 'saas' && (
+                <button
+                  type="button"
+                  className="routine-popup-trigger-btn"
+                  onClick={() => setRoutineModalOpen(true)}
+                >
+                  Routine Tasks
+                </button>
+              )}
             </div>
 
             <div className="tabs">
@@ -501,6 +514,8 @@ export default function ManagerDashboard() {
             onCreateRoutine={handleCreateRoutine}
             onToggleRoutine={handleToggleRoutine}
             onDeleteRoutine={handleDeleteRoutine}
+            mobileOpen={routineModalOpen}
+            onCloseMobile={() => setRoutineModalOpen(false)}
           />
         )}
       </div>
