@@ -2,19 +2,28 @@ const webpush = require('web-push');
 const db = require('../db');
 const { sendWhatsAppNotification } = require('./whatsapp');
 
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@studiotasks.com';
+function cleanEnv(val) {
+  return String(val || '').trim().replace(/^["']|["']$/g, '');
+}
 
-const vapidConfigured = Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
-if (vapidConfigured) {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+const VAPID_PUBLIC_KEY = cleanEnv(process.env.VAPID_PUBLIC_KEY);
+const VAPID_PRIVATE_KEY = cleanEnv(process.env.VAPID_PRIVATE_KEY);
+const VAPID_SUBJECT = cleanEnv(process.env.VAPID_SUBJECT) || 'mailto:admin@studiotasks.com';
+
+let vapidConfigured = false;
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  try {
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    vapidConfigured = true;
+  } catch (err) {
+    console.error('[Push] Invalid VAPID configuration:', err.message);
+  }
 } else {
   console.warn('[Push] VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY not set in environment; Web Push disabled until configured.');
 }
 
 function getVapidPublicKey() {
-  return VAPID_PUBLIC_KEY || null;
+  return vapidConfigured ? VAPID_PUBLIC_KEY : null;
 }
 
 async function savePushSubscription(userId, companyId, subscription) {

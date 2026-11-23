@@ -17,33 +17,13 @@ const { startReminderScheduler } = require('./services/push');
 
 const app = express();
 
-const configuredOrigins = (process.env.CORS_ORIGIN || '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-
 const corsOptions = {
-  origin(origin, callback) {
-    // Allow non-browser requests (Vercel Cron, curl, server-to-server)
-    if (!origin) return callback(null, true);
-    if (configuredOrigins.includes('*') || configuredOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    if (
-      /^https:\/\/[a-zA-Z0-9-]+\.vercel\.app$/.test(origin) ||
-      /^http:\/\/localhost:\d+$/.test(origin) ||
-      /^http:\/\/127\.0\.0\.1:\d+$/.test(origin)
-    ) {
-      return callback(null, true);
-    }
-    return callback(null, false);
-  },
+  origin: process.env.CORS_ORIGIN,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Company-Id'],
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 app.use(express.json());
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
@@ -67,30 +47,26 @@ app.use((req, res) => {
 });
 
 const PORT = process.env.PORT || 4000;
+app.listen(PORT, async () => {
+  console.log(`Studio Tasks API listening on port ${PORT}`);
+  if (!process.env.VERCEL) {
+    initAllSavedWhatsAppClients().catch((err) =>
+      console.error('WhatsApp auto-init error:', err.message)
+    );
+    startReminderScheduler();
+  }
+  try {
+    const schema = fs.readFileSync(path.join(__dirname, '../db/schema.sql'), 'utf8');
+    await db.query(schema);
+    // Ensure any existing users without a phone number receive a default fallback phone
+    await db.query(`
+      UPDATE users
+      SET phone = '98765432' || LPAD(id::text, 2, '0')
+      WHERE phone IS NULL OR TRIM(phone) = ''
+    `);
+  } catch (err) {
+    console.error('Schema sync warning:', err.message);
+  }
+});
 
-if (require.main === module) {
-  app.listen(PORT, async () => {
-    console.log(`Studio Tasks API listening on port ${PORT}`);
-    if (!process.env.VERCEL) {
-      initAllSavedWhatsAppClients().catch((err) =>
-        console.error('WhatsApp auto-init error:', err.message)
-      );
-      startReminderScheduler();
-    }
-    try {
-      const schema = fs.readFileSync(path.join(__dirname, '../db/schema.sql'), 'utf8');
-      await db.query(schema);
-      // Ensure any existing users without a phone number receive a default fallback phone
-      await db.query(`
-        UPDATE users
-        SET phone = '98765432' || LPAD(id::text, 2, '0')
-        WHERE phone IS NULL OR TRIM(phone) = ''
-      `);
-    } catch (err) {
-      console.error('Schema sync warning:', err.message);
-    }
-  });
-}
-
-// Export Express app for Vercel Serverless (@vercel/node)
 module.exports = app;
