@@ -14,6 +14,7 @@ export default function AssignTaskForm({
   const [description, setDescription] = useState('');
   const [taskDate, setTaskDate] = useState(todayStr());
   const [priority, setPriority] = useState('normal');
+  const [reminderIntervalDays, setReminderIntervalDays] = useState('1');
 
   useEffect(() => {
     if (team.length > 0 && !team.some((p) => String(p.id) === String(assignedTo))) {
@@ -24,17 +25,21 @@ export default function AssignTaskForm({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!title.trim() || !assignedTo) return;
+    const parsedReminderDays = Number(reminderIntervalDays);
     onSubmit({
       assignedTo: Number(assignedTo),
       title: title.trim(),
       description: description.trim() || undefined,
       taskDate,
       priority,
+      reminderIntervalDays:
+        Number.isInteger(parsedReminderDays) && parsedReminderDays > 0 ? parsedReminderDays : null,
     }).then((ok) => {
       if (ok) {
         setTitle('');
         setDescription('');
         setPriority('normal');
+        setReminderIntervalDays('1');
       }
     });
   };
@@ -89,6 +94,24 @@ export default function AssignTaskForm({
               <option value="high">High</option>
             </select>
           </div>
+        </div>
+
+        <div className="field">
+          <label>Reminder frequency in days (notifies at 11:00 AM sharp until Done)</label>
+          <input
+            type="number"
+            min="0"
+            max="365"
+            step="1"
+            value={reminderIntervalDays}
+            onChange={(e) => setReminderIntervalDays(e.target.value)}
+            placeholder="e.g. 1 (repeats every 1 day at 11:00 AM, 0 for no reminder)"
+          />
+          <small style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: 4, display: 'block' }}>
+            {Number(reminderIntervalDays) > 0
+              ? `⏰ Sends push notification & reminder every ${Number(reminderIntervalDays)} day${Number(reminderIntervalDays) > 1 ? 's' : ''} at 11:00 AM until marked Done.`
+              : 'Reminders turned off for this task (enter 1 or more days to enable 11:00 AM reminders).'}
+          </small>
         </div>
 
         <button className="btn btn-primary btn-block" type="submit" disabled={submitting}>

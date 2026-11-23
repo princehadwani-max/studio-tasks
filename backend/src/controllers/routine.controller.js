@@ -4,6 +4,7 @@ const {
   buildWhatsAppUrl,
   sendWhatsAppNotification,
 } = require('../services/whatsapp');
+const { sendPushToUser } = require('../services/push');
 
 const DASHBOARD_ROLES = ['super_admin', 'admin', 'MD', 'manager', 'sales manager', 'sales_manager'];
 
@@ -122,6 +123,17 @@ async function createRoutine(req, res) {
     const full = await db.query(`SELECT ${ROUTINE_FIELDS} ${ROUTINE_JOIN} WHERE r.id = $1`, [rows[0].id]);
     const routine = shapeRoutine(full.rows[0]);
     const companyName = req.tenant?.name || 'Starco Ceramics';
+
+    try {
+      await sendPushToUser(routine.assignedTo.id, {
+        title: `🔁 New ${routine.frequency === 'monthly' ? 'Monthly' : 'Daily'} Routine Assigned`,
+        body: `${routine.title} — Assigned by ${req.user.name}`,
+        tag: `routine-${routine.id}`,
+        requireInteraction: true,
+      });
+    } catch {
+      // Never block routine creation if push delivery fails
+    }
 
     let whatsapp = { sent: false, provider: 'disabled', whatsappUrl: routine.whatsappUrl };
     if (req.tenant?.features?.whatsapp !== false) {

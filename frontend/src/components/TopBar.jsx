@@ -1,11 +1,157 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { api } from '../api/client.js';
 import Avatar from './Avatar.jsx';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+function playNotificationChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+
+    const notes = [587.33, 880]; // D5 -> A5 pleasant alert chime
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.14);
+      gain.gain.setValueAtTime(0.001, now + idx * 0.14);
+      gain.gain.exponentialRampToValueAtTime(0.22, now + idx * 0.14 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.14 + 0.28);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + idx * 0.14);
+      osc.stop(now + idx * 0.14 + 0.3);
+    });
+  } catch {
+    // Ignore audio context autoplay restrictions if user hasn't interacted yet
+  }
+}
 
 export default function TopBar() {
   const { session, activeTenant, switchTenant, logout } = useAuth();
   const [theme, setTheme] = useState(() => localStorage.getItem('studio_tasks_theme') || 'dark');
   const [installPrompt, setInstallPrompt] = useState(null);
+  const [pushState, setPushState] = useState('checking'); // 'unsupported' | 'prompt' | 'granted' | 'denied' | 'subscribing'
+
+  const syncPushSubscription = useCallback(
+    async (requestPermission = false) => {
+      if (
+        typeof window === 'undefined' ||
+        !('serviceWorker' in navigator) ||
+        !('PushManager' in window) ||
+        !('Notification' in window)
+      ) {
+        setPushState('unsupported');
+        return false;
+      }
+
+      let permission = Notification.permission;
+      if (requestPermission && permission !== 'granted') {
+        permission = await Notification.requestPermission();
+      }
+
+      if (permission !== 'granted') {
+        setPushState(permission === 'denied' ? 'denied' : 'prompt');
+        return false;
+      }
+
+      try {
+        setPushState('subscribing');
+        const reg = await navigator.serviceWorker.ready;
+        const { publicKey } = await api.vapidPublicKey();
+        if (!publicKey) {
+          setPushState('prompt');
+          return false;
+        }
+
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey),
+          });
+        }
+
+        await api.pushSubscribe(session.token, sub.toJSON ? sub.toJSON() : sub);
+        setPushState('granted');
+        return true;
+      } catch (err) {
+        console.warn('[Push] Failed to sync subscription:', err.message);
+        setPushState('prompt');
+        return false;
+      }
+    },
+    [session?.token]
+  );
+
+  useEffect(() => {
+    if (!session?.token) return;
+    if (
+      typeof window === 'undefined' ||
+      !('serviceWorker' in navigator) ||
+      !('PushManager' in window) ||
+      !('Notification' in window)
+    ) {
+      setPushState('unsupported');
+      return;
+    }
+
+    if (Notification.permission === 'granted') {
+      syncPushSubscription(false);
+    } else if (Notification.permission === 'denied') {
+      setPushState('denied');
+    } else {
+      setPushState('prompt');
+    }
+  }, [session?.token, syncPushSubscription]);
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return undefined;
+    const onMessage = (event) => {
+      if (event.data && event.data.type === 'PUSH_NOTIFICATION_RECEIVED') {
+        playNotificationChime();
+        if (navigator.vibrate) {
+          navigator.vibrate([250, 100, 250]);
+        }
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, []);
+
+  const handleEnableAlertsClick = async () => {
+    if (pushState === 'granted') {
+      playNotificationChime();
+      try {
+        await api.pushTest(session.token);
+      } catch {
+        // Ignore test errors
+      }
+      return;
+    }
+    const ok = await syncPushSubscription(true);
+    if (ok) {
+      playNotificationChime();
+      try {
+        await api.pushTest(session.token);
+      } catch {
+        // Ignore test errors
+      }
+    }
+  };
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -94,6 +240,29 @@ export default function TopBar() {
             title="Install Studio Tasks as an app on your device"
           >
             ⬇ Install App
+          </button>
+        )}
+        {pushState !== 'unsupported' && (
+          <button
+            type="button"
+            className={`btn btn-sm ${pushState === 'granted' ? 'btn-ghost' : 'btn-teal'}`}
+            onClick={handleEnableAlertsClick}
+            disabled={pushState === 'subscribing'}
+            title={
+              pushState === 'granted'
+                ? 'Push notifications active — click to send a test notification with sound & vibration'
+                : pushState === 'denied'
+                  ? 'Notifications blocked in browser settings — allow notifications for this site to receive alerts'
+                  : 'Enable push notifications with sound & vibration for assigned tasks and 11:00 AM reminders'
+            }
+          >
+            {pushState === 'granted'
+              ? '🔔 Alerts On'
+              : pushState === 'subscribing'
+                ? '🔔 Enabling…'
+                : pushState === 'denied'
+                  ? '🔕 Alerts Blocked'
+                  : '🔔 Enable Alerts'}
           </button>
         )}
         <button

@@ -72,6 +72,12 @@ export const api = {
   whatsappStatus: (token) => request('/whatsapp/status', { token }),
   whatsappConnect: (token) => request('/whatsapp/connect', { method: 'POST', token }),
   whatsappDisconnect: (token) => request('/whatsapp/disconnect', { method: 'POST', token }),
+  vapidPublicKey: () => request('/push/vapid-public-key'),
+  pushSubscribe: (token, subscription) =>
+    request('/push/subscribe', { method: 'POST', body: { subscription }, token }),
+  pushUnsubscribe: (token, endpoint) =>
+    request('/push/unsubscribe', { method: 'POST', body: { endpoint }, token }),
+  pushTest: (token) => request('/push/test', { method: 'POST', token }),
   listTenants: (token) => request('/tenants', { token }),
   createTenant: (token, payload) => request('/tenants', { method: 'POST', body: payload, token }),
   updateTenant: (token, id, payload) => request(`/tenants/${id}`, { method: 'PATCH', body: payload, token }),

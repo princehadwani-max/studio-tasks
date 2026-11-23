@@ -83,6 +83,19 @@ export default function TaskCard({
               Carried · {formatShortDate(taskDateStr)}
             </span>
           )}
+          {task.reminderIntervalDays > 0 && task.status !== 'completed' && (
+            <span
+              className="carried-badge"
+              style={{
+                color: 'var(--primary)',
+                background: 'var(--primary-dim)',
+                borderColor: 'rgba(75, 148, 192, 0.3)',
+              }}
+              title={`Repeats push notification every ${task.reminderIntervalDays} day(s) at 11:00 AM until marked Done`}
+            >
+              ⏰ Every {task.reminderIntervalDays}d · 11 AM
+            </span>
+          )}
           <span className={`priority-flag ${task.priority}`}>{task.priority}</span>
         </div>
 

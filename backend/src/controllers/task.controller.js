@@ -4,12 +4,14 @@ const {
   buildWhatsAppUrl,
   sendWhatsAppNotification,
 } = require('../services/whatsapp');
+const { sendPushToUser, checkAndSendDueTaskReminders } = require('../services/push');
 
 const DASHBOARD_ROLES = ['super_admin', 'admin', 'MD', 'manager', 'sales manager', 'sales_manager'];
 
 const TASK_FIELDS = `
   t.id, t.code, t.title, t.description, t.task_date, t.status, t.priority,
-  t.completion_note, t.created_at, t.updated_at, t.started_at, t.completed_at,
+  t.completion_note, t.reminder_interval_days, t.last_reminder_sent_date,
+  t.created_at, t.updated_at, t.started_at, t.completed_at,
   au.id AS assigned_to_id, au.name AS assigned_to_name, au.phone AS assigned_to_phone, au.role_label AS assigned_to_role_label,
   ab.id AS assigned_by_id, ab.name AS assigned_by_name,
   COALESCE(
@@ -51,6 +53,8 @@ function shapeTask(row) {
     status: row.status,
     priority: row.priority,
     completionNote: row.completion_note,
+    reminderIntervalDays: row.reminder_interval_days ? Number(row.reminder_interval_days) : null,
+    lastReminderSentDate: row.last_reminder_sent_date || null,
     remarks: row.remarks || [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -70,11 +74,19 @@ function shapeTask(row) {
 
 // Admin, MD, or Manager assigns a task to any active team member in their company.
 async function createTask(req, res) {
-  const { title, description, assignedTo, taskDate, priority } = req.body;
+  const { title, description, assignedTo, taskDate, priority, reminderIntervalDays } = req.body;
 
   if (!title || !assignedTo) {
     return res.status(400).json({ error: 'A title and an assignee are required.' });
   }
+
+  const parsedReminderDays =
+    reminderIntervalDays !== undefined &&
+    reminderIntervalDays !== null &&
+    reminderIntervalDays !== '' &&
+    Number(reminderIntervalDays) > 0
+      ? Math.max(1, Math.min(365, Math.floor(Number(reminderIntervalDays))))
+      : null;
 
   try {
     const assignee = await db.query(
@@ -102,15 +114,41 @@ async function createTask(req, res) {
     const code = `TSK-${String(seqRes.rows[0].task_seq).padStart(4, '0')}`;
 
     const { rows } = await db.query(
-      `INSERT INTO tasks (company_id, code, title, description, assigned_to, assigned_by, task_date, priority)
-       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, CURRENT_DATE), COALESCE($8, 'normal'))
+      `INSERT INTO tasks (company_id, code, title, description, assigned_to, assigned_by, task_date, priority, reminder_interval_days)
+       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, CURRENT_DATE), COALESCE($8, 'normal'), $9)
        RETURNING id`,
-      [req.tenantId, code, title, description || null, assignedTo, req.user.id, taskDate || null, priority || null]
+      [
+        req.tenantId,
+        code,
+        title,
+        description || null,
+        assignedTo,
+        req.user.id,
+        taskDate || null,
+        priority || null,
+        parsedReminderDays,
+      ]
     );
 
     const full = await db.query(`SELECT ${TASK_FIELDS} ${TASK_JOIN} WHERE t.id = $1`, [rows[0].id]);
     const task = shapeTask(full.rows[0]);
     const companyName = req.tenant?.name || 'Starco Ceramics';
+
+    // Send instant OS Web Push Notification (with sound & vibration) to the assigned person
+    const reminderSuffix = parsedReminderDays
+      ? ` · Reminder every ${parsedReminderDays}d at 11:00 AM`
+      : '';
+    try {
+      await sendPushToUser(task.assignedTo.id, {
+        title: `📋 New Task Assigned (${task.code})`,
+        body: `${task.title} — Assigned by ${req.user.name}${reminderSuffix}`,
+        tag: `new-task-${task.code}`,
+        taskId: task.id,
+        requireInteraction: true,
+      });
+    } catch {
+      // Never block task creation if push delivery fails
+    }
 
     let whatsapp = { sent: false, provider: 'disabled', whatsappUrl: task.whatsappUrl };
     if (req.tenant?.features?.whatsapp !== false) {
@@ -154,6 +192,9 @@ async function listTasks(req, res) {
   }
 
   try {
+    // Piggyback check for any due 11:00 AM IST reminders (idempotent via last_reminder_sent_date)
+    await checkAndSendDueTaskReminders(false).catch(() => {});
+
     const { rows } = await db.query(
       `SELECT ${TASK_FIELDS} ${TASK_JOIN} WHERE ${clauses.join(' AND ')} ORDER BY
          CASE t.status WHEN 'in_progress' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END, t.created_at`,
@@ -326,7 +367,25 @@ async function addRemark(req, res) {
     await db.query(`UPDATE tasks SET updated_at = NOW() WHERE id = $1 AND company_id = $2`, [id, req.tenantId]);
 
     const full = await db.query(`SELECT ${TASK_FIELDS} ${TASK_JOIN} WHERE t.id = $1`, [id]);
-    return res.status(201).json({ task: shapeTask(full.rows[0]) });
+    const task = shapeTask(full.rows[0]);
+
+    // Notify assignee or assigner when a new remark is posted
+    const notifyTargetId =
+      req.user.id === task.assignedTo.id ? task.assignedBy.id : task.assignedTo.id;
+    if (notifyTargetId && notifyTargetId !== req.user.id) {
+      try {
+        await sendPushToUser(notifyTargetId, {
+          title: `💬 New Remark on ${task.code}`,
+          body: `${req.user.name}: "${remarkText}"`,
+          tag: `remark-${task.code}-${Date.now()}`,
+          taskId: task.id,
+        });
+      } catch {
+        // Never block remark creation if push delivery fails
+      }
+    }
+
+    return res.status(201).json({ task });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Could not add the remark.' });

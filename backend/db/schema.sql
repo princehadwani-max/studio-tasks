@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS company_id INTEGER NOT NULL DEFAULT 1 REFERENCES companies(id) ON DELETE CASCADE;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS reminder_interval_days INTEGER;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_reminder_sent_date DATE;
 ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_code_key;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_company_code ON tasks (company_id, code);
 CREATE INDEX IF NOT EXISTS idx_tasks_company_id ON tasks (company_id);
@@ -115,3 +117,16 @@ CREATE TABLE IF NOT EXISTS task_remarks (
 
 ALTER TABLE task_remarks ADD COLUMN IF NOT EXISTS company_id INTEGER NOT NULL DEFAULT 1 REFERENCES companies(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_task_remarks_task_id ON task_remarks (task_id, created_at);
+
+-- Web Push Notification device subscriptions per user
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id         SERIAL PRIMARY KEY,
+  company_id INTEGER      REFERENCES companies(id) ON DELETE CASCADE,
+  user_id    INTEGER      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint   TEXT         NOT NULL UNIQUE,
+  p256dh     TEXT         NOT NULL,
+  auth       TEXT         NOT NULL,
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions (user_id);
